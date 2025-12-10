@@ -1,0 +1,20 @@
+# Ambientes virtuais
+venv/
+venv_lin/
+venv_win/
+
+# Dados pesados (DataSUS)
+dados_sia/
+*.parquet
+*.csv
+*.feather
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/

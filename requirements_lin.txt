@@ -1,0 +1,34 @@
+pysus==1.0.0
+pyreaddbc==1.2.0
+dbfread==2.0.7
+
+pandas==2.2.2
+numpy==1.26.4          # numpy 2.0+ quebra pyreaddbc
+pyarrow==14.0.2        # compatível com pandas 2.1
+fastparquet==2023.10.1 # última versão estável para pandas 2.1
+
+fsspec>=2023.10.0
+aioftp==0.21.4
+bigtree==0.12.5
+certifi
+cffi==1.17.1
+cramjam
+dateparser
+elasticsearch==7.16.2
+humanize
+loguru
+python-dateutil
+python-dotenv
+pytz
+PyYAML
+regex
+six
+tqdm
+typing_extensions
+tzdata
+tzlocal
+Unidecode
+urllib3
+urwid
+wcwidth
+wget
