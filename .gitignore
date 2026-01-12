@@ -31,3 +31,9 @@ dados_tratados/
 
 # Pasta Streamlit do Projeto
 Streamlit/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
