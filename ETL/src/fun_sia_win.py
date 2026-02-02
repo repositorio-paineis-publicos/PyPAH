@@ -1,7 +1,9 @@
 import os
 import math
 from ftplib import FTP
-
+from dbfread import DBF
+import zipfile
+from pathlib import Path
 
 import pandas as pd
 import pyarrow as pa
@@ -144,7 +146,7 @@ def tratar_dados_sia(
                 format='%Y-%m'
             )
             df['Ano'] = df['data_ref'].dt.year
-            df['Mês'] = df['data_ref'].dt.month_name()
+            df['Mes'] = df['data_ref'].dt.month_name()
 
             # Adiciona coluna de UF
 
@@ -185,117 +187,6 @@ def tratar_dados_sia(
 
 
 
-def corrigir_colunas_PA(df):
-    cols_quant = ['PA_QTDPRO', 'PA_QTDAPR']
-    cols_val = ['PA_VALPRO', 'PA_VALAPR']
-
-    df_novo = df[cols_quant + cols_val + ['arquivo_origem']
-                     ]
-    df_novo[cols_quant] = df_novo[cols_quant].fillna(0).astype(int)
-    df_novo[cols_val] = df_novo[cols_val].fillna(0).astype(float)
-
-    return df_novo
-
-
-
-def somatorio_anual_PA(df):
-
-
-  somas = {
-    'PA_QTDPRO': df['PA_QTDPRO'].sum(),
-    'PA_QTDAPR': df['PA_QTDAPR'].sum(),
-    'PA_VALPRO': df['PA_VALPRO'].sum(),
-    'PA_VALAPR': df['PA_VALAPR'].sum()
-  }
-
-  df_somas = pd.DataFrame({
-    'Tipo': ['Quantidade', 'Valor'],
-    'PRO': [somas['PA_QTDPRO'], somas['PA_VALPRO']],
-    'APR': [somas['PA_QTDAPR'], somas['PA_VALAPR']]
-  })
-
-  return df_somas
-
-
-
-def plot_PA(df, agrupamento='arquivo_origem', mostrar=['quantidade','valor']):
-
-
-    """
-    Plota comparação PRO vs APR com barras lado a lado e cores distintas.
-    
-    Parâmetros:
-    - df: DataFrame com colunas PA_QTDPRO, PA_QTDAPR, PA_VALPRO, PA_VALAPR e coluna de agrupamento
-    - agrupamento: coluna para agrupar ('arquivo_origem' = mês, 'ano', etc.)
-    - mostrar: lista com 'quantidade', 'valor' ou ambos
-    """
-
-
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    import numpy as np
-
-
-    # Agrupa os dados
-    df_agrupado = df.groupby(agrupamento).sum(numeric_only=True).reset_index()
-    categorias = df_agrupado[agrupamento]
-    n_categorias = len(categorias)
-    
-    # Configura cores distintas
-    cores = {
-        'PRO_quantidade': '#1f77b4',  # azul escuro
-        'APR_quantidade': '#ff7f0e',  # laranja
-        'PRO_valor': '#2ca02c',       # verde
-        'APR_valor': '#d62728',       # vermelho
-    }
-    
-    # Configura posição das barras
-    largura = 0.2  # largura de cada barra
-    total_barras = len(mostrar) * 2  # PRO + APR para cada tipo
-    offsets = np.linspace(-largura*total_barras/2 + largura/2, largura*total_barras/2 - largura/2, total_barras)
-    
-    fig, ax = plt.subplots(figsize=(12,6))
-    
-    barras = []
-    idx = 0
-    for tipo in mostrar:
-        # PRO
-        barras_pro = ax.bar(x= np.arange(n_categorias) + offsets[idx], 
-                            height=df_agrupado[f'PA_QTDPRO' if tipo=='quantidade' else f'PA_VALPRO'],
-                            width=largura, label=f'PRO ({tipo.capitalize()})', color=cores[f'PRO_{tipo}'])
-        barras.append(barras_pro)
-        idx += 1
-        # APR
-        barras_apr = ax.bar(x= np.arange(n_categorias) + offsets[idx], 
-                            height=df_agrupado[f'PA_QTDAPR' if tipo=='quantidade' else f'PA_VALAPR'],
-                            width=largura, label=f'APR ({tipo.capitalize()})', color=cores[f'APR_{tipo}'])
-        barras.append(barras_apr)
-        idx += 1
-    
-    # Adiciona valores acima das barras
-    for grupo in barras:
-        for barra in grupo:
-            altura = barra.get_height()
-            ax.text(barra.get_x() + barra.get_width()/2, altura + altura*0.01,
-                    f'{altura:,.0f}', ha='center', va='bottom', fontsize=9)
-    
-    # Configurações do gráfico
-    ax.set_xlabel('Categoria', fontsize=12)
-    ax.set_ylabel('Soma', fontsize=12)
-    ax.set_title(f'Comparação PRO vs APR por {agrupamento}', fontsize=14, weight='bold')
-    ax.set_xticks(np.arange(n_categorias))
-    ax.set_xticklabels(categorias, rotation=45, fontsize=11)
-    ax.legend()
-    plt.grid(axis='y', linestyle='--', alpha=0.5)
-    sns.despine()
-    plt.tight_layout()
-    plt.show()
-
-
-                  # Move os arquivos gerados
-
-
-
 def move_arquivo(arquivo, pasta_destino='dados_sia/dados_prontos'):
     import shutil
     from pathlib import Path
@@ -307,4 +198,88 @@ def move_arquivo(arquivo, pasta_destino='dados_sia/dados_prontos'):
     destino_final = Path(pasta_destino) / caminho.name
     shutil.move(str(caminho), destino_final)
     print(f"{arquivo} movido para {pasta_destino} com sucesso.")
+
+
+
+def download_estab_label(
+    nome_saida="dim_estabelecimento.parquet",
+    destino=Path(r"C:\Projetos\PyPAH\dados_sia\rotulos")
+):
+    destino.mkdir(parents=True, exist_ok=True)
+
+    zip_path = destino / "TAB_CNES.zip"
+    extract_path = destino / "TAB_CNES"
+    dbf_path = extract_path / "DBF" / "CADGERBR.dbf"
+    output_path = destino / nome_saida
+
+    ftp = FTP("ftp.datasus.gov.br")
+    ftp.login()
+    ftp.cwd("/dissemin/publicos/CNES/200508_/Auxiliar")
+
+    with open(zip_path, "wb") as f:
+        ftp.retrbinary("RETR TAB_CNES.zip", f.write)
+
+    ftp.quit()
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(extract_path)
+
+    df_labels = pd.DataFrame(DBF(dbf_path, encoding="latin-1"))
+
+    df_dim_estab = (
+        df_labels
+        .rename(columns={"CNES": "PA_CODUNI"})
+        [["PA_CODUNI", "FANTASIA"]]
+        .drop_duplicates()
+        .assign(PA_CODUNI=lambda x: x["PA_CODUNI"].astype(str))
+    )
+
+    df_dim_estab["label_estabelecimento"] = df_dim_estab["PA_CODUNI"] + " - " + df_dim_estab["FANTASIA"]
+
+    df_dim_estab.to_parquet(output_path, index=False)
+
+    return output_path
+
+
+
+def download_proc_label(
+    nome_saida="dim_procedimentos.parquet",
+    destino=Path(r"C:\Projetos\PyPAH\dados_sia\rotulos")
+):
+    destino.mkdir(parents=True, exist_ok=True)
+
+    zip_path = destino / "TAB_SIA.zip"
+    extract_path = destino / "TAB_SIA"
+    dbf_path = extract_path / "DBF" / "TB_SIGTAW.dbf"
+    output_path = destino / nome_saida
+
+    ftp = FTP("ftp.datasus.gov.br")
+    ftp.login()
+    ftp.cwd("/dissemin/publicos/SIASUS/200801_/Auxiliar")
+
+    with open(zip_path, "wb") as f:
+        ftp.retrbinary("RETR TAB_SIA.zip", f.write)
+
+    ftp.quit()
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(extract_path)
+
+    df_labels = pd.DataFrame(DBF(dbf_path, encoding="latin-1"))
+
+    df_dim_estab = (
+        df_labels
+        .rename(columns={"IP_COD": "PA_PROC_ID"})
+        [["PA_PROC_ID", "IP_DSCR"]]
+        .drop_duplicates()
+        .assign(PA_PROC_ID=lambda x: x["PA_PROC_ID"].astype(str))
+    )
+
+    df_dim_estab["label_procedimento"] = df_dim_estab["PA_PROC_ID"] + " - " + df_dim_estab["IP_DSCR"]
+
+    df_dim_estab.to_parquet(output_path, index=False)
+
+    return output_path
+
+
 

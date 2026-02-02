@@ -2,31 +2,6 @@ import os
 import shutil
 from pathlib import Path
 
-def download_arq_sia(grupo, estado, ano, meses, local_dir ='~/projetos/meu_projeto/dados_sia'):
-    from pysus import SIA # type: ignore
-    sia = SIA().load()
-    
-    arquivos_baixados = []
-    
-    for mes in meses:
-        print(f"Baixando arquivos do grupo {grupo}, UF {estado}, ano {ano}, mês {mes}...")
-        arquivos = sia.get_files(group=grupo, uf=estado, year=ano, month=mes)
-        if arquivos:
-            baixados = sia.download(arquivos, local_dir=local_dir)
-                        
-            # normaliza para lista
-            if not isinstance(baixados, list):
-                baixados = [baixados]
-            
-            arquivos_baixados.extend(baixados)
-            arquivos_baixados.extend(baixados)
-        else:
-            print(f"Nenhum arquivo disponível para {mes}/{ano}")
-    
-    print(f"Download concluído. Total de arquivos baixados: {len(arquivos_baixados)}")
-    return arquivos_baixados
-
-
 
 def conv_dbc_para_pqt(pasta_origem ='../dados_sia/dados_dbc', pasta_destino='dados_sia/dados_parquet'):
     """

@@ -3,6 +3,7 @@ venv_lin/
 venv_win/
 venv/
 .venv/
+venv_global
 
 # Cache Python
 __pycache__/
@@ -28,9 +29,6 @@ dados_tratados/
 .DS_Store
 .vscode/
 
-
-# Pasta Streamlit do Projeto
-Streamlit/
 
 # Jupyter
 .ipynb_checkpoints/
