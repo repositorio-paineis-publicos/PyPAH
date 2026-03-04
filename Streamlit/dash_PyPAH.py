@@ -1,69 +1,82 @@
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import duckdb
+from pathlib import Path
 
+# caminho configurável (Windows ou Docker)
+BASE_PATH = Path(os.getenv("PYPah_BASE_PATH", "/app"))
+DB_PATH = BASE_PATH / "db" / "db.duckdb"
+ROTULOS_PATH = BASE_PATH / "dados_sia" / "rotulos"
+
+@st.cache_resource
+def get_con():
+    os.makedirs(DB_PATH.parent, exist_ok=True)
+    return duckdb.connect(str(DB_PATH), read_only=True)
+
+con = get_con()
+
+
+@st.cache_data
 def optimize_plotly(fig):
     fig.update_layout(
-        hovermode="closest",   # apenas o ponto
+        hovermode="closest",
         transition_duration=0
     )
     return fig
 
-@st.cache_resource
-def get_con():
-    con = duckdb.connect()
-    con.execute("""
-        CREATE OR REPLACE VIEW fact_qtd_val AS
-        SELECT * FROM read_parquet(
-            'C:/Projetos/PyPAH/dados_sia/facts_dash/fact_qtd_val.parquet'
-        )
-    """)
-    return con
+
+@st.cache_data(show_spinner=True)
+def anos_disponiveis():
+    return (
+        con.execute("SELECT DISTINCT Ano FROM gold_fact_qtd_val_TT ORDER BY Ano")
+        .df()["Ano"]
+        .tolist()
+    )
 
 
-
-@st.cache_data
-def filtrar_dados(df, hospital, ano, filtro_anos):
-    df_f = df.copy()
-
-    if hospital:
-        df_f = df_f[df_f["PA_CODUNI"].isin(hospital)]
-
-
-    if not filtro_anos:
-        df_f = df_f[df_f["data_ref"].dt.year == ano]
-
-    return df_f
-
-def load_dim(tab_dim):
-    return pd.read_parquet(tab_dim)
-
-def anos_disponiveis(con):
-    q = """
-    SELECT DISTINCT Ano
-    FROM fact_qtd_val
-    ORDER BY Ano
-    """
-    return con.execute(q).df()["Ano"].tolist()
-
-def meses_disponiveis_multi(con, anos):
-    if not anos:
-        return []
-
+@st.cache_data(show_spinner=True)
+def meses_disponiveis_multi(anos):
     anos_sql = ",".join(map(str, anos))
 
     q = f"""
-    SELECT DISTINCT Mes
-    FROM fact_qtd_val
-    WHERE Ano IN ({anos_sql})
-    GROUP BY Mes
-    ORDER BY MIN(data_ref)
+        SELECT Mes
+        FROM gold_fact_qtd_val_TT
+        WHERE Ano IN ({anos_sql})
+        GROUP BY Mes
+        ORDER BY MIN(data_ref)
     """
+
     return con.execute(q).df()["Mes"].tolist()
 
 
+@st.cache_data(show_spinner=False)
+def load_dim_estabelecimento():
+    df = pd.read_parquet(
+        ROTULOS_PATH / "dim_estabelecimento_ce.parquet",
+        columns=["PA_CODUNI", "label_estabelecimento"]
+    )
+    return df
 
+
+@st.cache_data(show_spinner=False)
+def load_dim_procedimento():
+    df = pd.read_parquet(
+        ROTULOS_PATH / "dim_procedimento.parquet",
+        columns=["PA_PROC_ID", "label_procedimento"]
+    )
+    return df
+
+
+@st.cache_data(show_spinner=True)
+def municipios_disponiveis():
+    return (
+        con.execute("SELECT DISTINCT PA_MUNPCN FROM gold_fact_qtd_val_TT")
+        .df()["PA_MUNPCN"]
+        .sort_values()
+        .tolist()
+    )
 
 
 st.set_page_config(layout='wide')
@@ -72,21 +85,16 @@ st.title('PyPah Dashboard')
 st.sidebar.title('Filtros')
 
 
-file = r"C:/Projetos/PyPAH/dados_sia/facts_dash/fact_qtd_val.parquet"
-
-df = pd.read_parquet(file)
-
-
 ## =========================
 ## Criação dos filtros
 ## =========================
 
 
-df_dim_est = load_dim(r"C:/Projetos/PyPAH/dados_sia/rotulos/dim_estabelecimento.parquet")
-df_dim_proc = load_dim(r"C:/Projetos/PyPAH/dados_sia/rotulos/dim_procedimentos.parquet")
+df_dim_est = load_dim_estabelecimento()
+df_dim_proc = load_dim_procedimento()
+
 
 # Filtro de procedimentos
-opcoes_proc = df_dim_proc['label_procedimento'].sort_values().tolist()
 
 filtrar_proc = st.sidebar.checkbox(
     "Filtrar por procedimento",
@@ -96,6 +104,9 @@ pa_proc_ids = None
 
 
 if filtrar_proc:
+    with st.spinner("Carregando procedimentos..."):
+            opcoes_proc = df_dim_proc['label_procedimento'].sort_values().tolist()
+
     filtro_procedimentos = st.sidebar.multiselect(
         "Selecione os procedimentos",
         options=opcoes_proc
@@ -106,7 +117,6 @@ if filtrar_proc:
 
 
 # Filtro de estabelecimentos
-opcoes_estab = df_dim_est['label_estabelecimento'].sort_values().tolist()
 
 filtrar_estab = st.sidebar.checkbox(
     "Filtrar por estabelecimento",
@@ -116,6 +126,8 @@ pa_codunis = None
 
 
 if filtrar_estab:
+    with st.spinner("Carregando estabelecimentos..."):
+        opcoes_estab = df_dim_est['label_estabelecimento'].sort_values().tolist()
     filtro_estabelecimentos = st.sidebar.multiselect(
         "Selecione os estabelecimentos",
         options=opcoes_estab
@@ -125,23 +137,21 @@ if filtrar_estab:
         pa_codunis = [map_estab_to_cod[estab] for estab in filtro_estabelecimentos]
 
 
-
-
-
-
-
 ## Filtro de datas
 # Filtro de anos
-con = get_con()
-anos_disp = anos_disponiveis(con)
+anos_disp = anos_disponiveis()
 
-filtro_anos = st.sidebar.checkbox(
-    "Filtrar por anos",
-    value=False
-)
+filtro_anos = False
+
+if len(anos_disp) > 1:
+    filtro_anos = st.sidebar.checkbox(
+        "Filtrar por anos",
+        value=False
+    )
+
+
 
 if filtro_anos:
-
     ano_sel = st.sidebar.slider(
         "Ano",
         min(anos_disp),
@@ -155,17 +165,13 @@ else:
 # Filtro de meses
 meses = None
 
-meses_validos = meses_disponiveis_multi(
-    con=con,
-    anos=anos_sel
-)
-
-
 filtro_meses = st.sidebar.checkbox(
     "Filtrar por meses",
     value=False
 )
 if filtro_meses:
+    with st.spinner("Carregando meses..."):
+        meses_validos = meses_disponiveis_multi(anos=anos_sel)
     meses = st.sidebar.multiselect(
         "Meses",
         options=meses_validos,
@@ -174,9 +180,8 @@ if filtro_meses:
 
 
 
-
 # Filtro de municípios
-opcoes_mun = sorted(df["PA_MUNPCN"].unique().tolist())
+
 
 filtro_municipio = st.sidebar.checkbox(
     "Filtrar por municípios",
@@ -184,6 +189,8 @@ filtro_municipio = st.sidebar.checkbox(
 )
 
 if filtro_municipio:
+    with st.spinner("Carregando municípios..."):
+        opcoes_mun = municipios_disponiveis()
     municipios = st.sidebar.multiselect(
         "Selecione os municípios",
         options = opcoes_mun,
@@ -192,6 +199,7 @@ else:
     municipios = None
 
 # Construção da query SQL com filtros
+
 
 where = []
 
@@ -202,11 +210,9 @@ if meses:
     meses_sql = ",".join(f"'{m}'" for m in meses)
     where.append(f"MES IN ({meses_sql})")
 
-
 if pa_codunis:
     cods_sql = ",".join(f"'{c}'" for c in pa_codunis)
     where.append(f"PA_CODUNI IN ({cods_sql})")
-
 
 if pa_proc_ids:
     procs_sql = ",".join(f"'{p}'" for p in pa_proc_ids)
@@ -217,18 +223,15 @@ if municipios:
     where.append(f"PA_MUNPCN IN ({mun_sql})")
 
 
-
 query = """
 SELECT * 
-FROM fact_qtd_val
+FROM gold_fact_qtd_val_TT
 """
 
 if where:
     query += " WHERE " + " AND ".join(where)
 
-
 df_filtro = con.execute(query).df()
-
 
 
 
@@ -505,4 +508,5 @@ with aba2:
                         config={"displayModeBar": False, "scrollZoom": False})
         
 with aba3:
+    st.write(df_filtro.shape)
     st.write(df_filtro.head(20))

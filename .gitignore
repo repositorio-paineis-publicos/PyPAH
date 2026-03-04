@@ -11,13 +11,11 @@ __pycache__/
 *.pyo
 
 # Variáveis de ambiente
-.env/
+.env
 
 # Dados (ETL / SIASUS)
 dados_sia/
-dados_prontos/
-dados_tratados/
-*.parquet
+db/
 
 # Streamlit
 .streamlit/secrets.toml
@@ -29,9 +27,14 @@ dados_tratados/
 .DS_Store
 .vscode/
 
+/Streamlit/teste.ipynb
 
 # Jupyter
 .ipynb_checkpoints/
 
 # VS Code
 .vscode/
+
+# Arquivos de teste
+ETL/ingestao_bronze.py
+ETL/ref.py

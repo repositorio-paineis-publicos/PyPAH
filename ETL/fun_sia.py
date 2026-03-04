@@ -1,9 +1,9 @@
 import os
-import math
 from ftplib import FTP
 from dbfread import DBF
 import zipfile
 from pathlib import Path
+import shutil
 
 import pandas as pd
 import pyarrow as pa
@@ -11,36 +11,92 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
 
+PASTA_DBC = Path(os.getenv("PASTA_DBC", "./dados_sia/dados_dbc"))
+PASTA_ROTULOS = Path(os.getenv("PASTA_ROTULOS", "./dados_sia/rotulos"))
+PASTA_GOLD = Path(os.getenv("PASTA_GOLD", "./dados_sia/Gold"))
+PASTA_SILVER = Path(os.getenv("PASTA_SILVER", "./dados_sia/Silver"))
 
-def baixar_dbc(grupo, estado, ano, meses, destino='../dados_sia/dados_dbc'):
 
-    """
-    Baixa arquivos .dbc do FTP do DATASUS por grupo, estado, ano e meses especificados e salva na pasta destino."""
 
-    #Cria pasta destino se não existir
+
+def baixar_dbc(grupo, estado, anos, meses, destino=PASTA_DBC):
     os.makedirs(destino, exist_ok=True)
-    
-    # Conecta ao FTP do DATASUS
-    ftp = FTP('ftp.datasus.gov.br')
+
+    ftp = FTP('ftp.datasus.gov.br', timeout=300)
+    ftp.set_pasv(True)
     ftp.login()
     ftp.cwd('/dissemin/publicos/SIASUS/200801_/Dados')
-    
-    # Baixa os arquivos especificados
-    for mes in meses:
-        nome_arquivo = f"{grupo}{estado}{str(ano)[-2:]}{mes:02d}.dbc"
-        caminho_local = os.path.join(destino, nome_arquivo)
-        print(f"Baixando {nome_arquivo}...")
 
-        try:
-            with open(caminho_local, 'wb') as f:
-                ftp.retrbinary(f"RETR {nome_arquivo}", f.write)
-            print(f"{nome_arquivo} salvo em {caminho_local}")
-        except Exception as e:
-            print(f"Erro com {nome_arquivo}: {e}")
-    
-    # Encerra a conexão FTP
+    for ano in anos:
+        for mes in meses:
+            nome_arquivo = f"{grupo}{estado}{str(ano)[-2:]}{mes:02d}.dbc"
+            caminho_local = os.path.join(destino, nome_arquivo)
+
+            print(f"Baixando {nome_arquivo}...")
+
+            try:
+                with open(caminho_local, 'wb') as f:
+                    ftp.retrbinary(f"RETR {nome_arquivo}", f.write)
+                print(f"{nome_arquivo} salvo em {caminho_local}")
+            except Exception as e:
+                print(f"Erro ao baixar {nome_arquivo}: {e}")
+
     ftp.quit()
     
+
+
+def conv_dbc_para_pqt(pasta_origem=None, pasta_destino=None):
+    pasta_origem = pasta_origem or os.getenv("PASTA_DBC", "./dados_sia/dados_dbc")
+    pasta_destino = pasta_destino or os.getenv("PASTA_BRONZE", "./dados_sia/Bronze")
+    """
+    Converte arquivos .dbc para .parquet via PySUS 1.0.0
+    e move os arquivos resultantes para uma pasta de destino.
+    """
+
+    from pysus.data.local import ParquetSet
+
+    # Cria pastas se não existirem
+    os.makedirs(pasta_origem, exist_ok=True)
+    os.makedirs(pasta_destino, exist_ok=True)
+
+    arquivos_dbc = [os.path.join(pasta_origem, arq) for arq in os.listdir(pasta_origem) if arq.endswith('.dbc')]
+    if not arquivos_dbc:
+        print("Nenhum arquivo .dbc encontrado.")
+        return
+
+    for arq in arquivos_dbc:
+        try:
+            print(f"Convertendo: {arq}")
+
+            # Cria o ParquetSet → faz toda a conversão automática
+            parquet_set = ParquetSet(arq)
+
+            # Caminho do resultado (.parquet)
+            caminho_parquet = Path(parquet_set.path)
+
+            # Define o destino final
+            nome_base = Path(arq).stem
+            destino_final = Path(pasta_destino) / f"{nome_base}.parquet"
+
+            # Move os arquivos gerados
+            if caminho_parquet.is_dir():
+                # PySUS salva múltiplos .parquet dentro de uma pasta
+                destino_pasta = Path(pasta_destino) / nome_base
+                os.makedirs(destino_pasta, exist_ok=True)
+                for arquivo in caminho_parquet.glob("*.parquet"):
+                    shutil.move(str(arquivo), destino_pasta / arquivo.name)
+                try:
+                    caminho_parquet.rmdir()
+                except OSError:
+                    pass
+                print(f"{nome_base} convertido (vários arquivos .parquet)")
+            else:
+                shutil.move(str(caminho_parquet), destino_final)
+                print(f"{nome_base} convertido (1 arquivo .parquet)")
+
+        except Exception as e:
+            print(f"Erro ao processar {arq}: {e}")
+
 
 
 def tratar_dados_sia(
@@ -51,7 +107,7 @@ def tratar_dados_sia(
     piloto=200_000,
     arquivo_saida="siasus_tratado.parquet",
     verbose=True
-):
+    ):
     
     """
     Docstring for carregar_dados_sia
@@ -143,8 +199,11 @@ def tratar_dados_sia(
 
             df['data_ref'] = pd.to_datetime(
                 '20' + df['arquivo_origem'].str[-4:-2] + '-' + df['arquivo_origem'].str[-2:],
-                format='%Y-%m'
+                format='%Y-%m', 
+                errors='coerce'
             )
+            df = df.dropna(subset=['data_ref'])
+
             df['Ano'] = df['data_ref'].dt.year
             df['Mes'] = df['data_ref'].dt.month_name()
 
@@ -187,7 +246,7 @@ def tratar_dados_sia(
 
 
 
-def move_arquivo(arquivo, pasta_destino='dados_sia/dados_prontos'):
+def move_arquivo(arquivo, pasta_destino=PASTA_GOLD):
     import shutil
     from pathlib import Path
 
@@ -203,8 +262,8 @@ def move_arquivo(arquivo, pasta_destino='dados_sia/dados_prontos'):
 
 def download_estab_label(
     nome_saida="dim_estabelecimento.parquet",
-    destino=Path(r"C:\Projetos\PyPAH\dados_sia\rotulos")
-):
+    destino=PASTA_ROTULOS
+    ):
     destino.mkdir(parents=True, exist_ok=True)
 
     zip_path = destino / "TAB_CNES.zip"
@@ -243,9 +302,9 @@ def download_estab_label(
 
 
 def download_proc_label(
-    nome_saida="dim_procedimentos.parquet",
-    destino=Path(r"C:\Projetos\PyPAH\dados_sia\rotulos")
-):
+    nome_saida="dim_Tprocedimentos.parquet",
+    destino=PASTA_ROTULOS
+    ):
     destino.mkdir(parents=True, exist_ok=True)
 
     zip_path = destino / "TAB_SIA.zip"
@@ -283,3 +342,58 @@ def download_proc_label(
 
 
 
+def estab_ce_label(nome_saida="dim_Testabelecimento_ce.parquet",
+                   
+    destino=PASTA_ROTULOS):
+    
+    zip_path = destino / "TAB_CNES.zip"
+    extract_path = destino / "TAB_CNES"
+    dbf_path = extract_path / "DBF" / "CADGERCE.dbf"
+    output_path = destino / nome_saida
+
+
+
+    ftp = FTP("ftp.datasus.gov.br")
+    ftp.login()
+    ftp.cwd("/dissemin/publicos/CNES/200508_/Auxiliar")
+
+    with open(zip_path, "wb") as f:
+        ftp.retrbinary("RETR TAB_CNES.zip", f.write)
+
+    ftp.quit()
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(extract_path)
+    print("running")
+
+    df_labels = pd.DataFrame(DBF(dbf_path, encoding="latin-1"))
+
+    df_dim_estab = (
+        df_labels
+        .rename(columns={"CNES": "PA_CODUNI"})
+        [["PA_CODUNI", "FANTASIA"]]
+        .drop_duplicates()
+        .assign(PA_CODUNI=lambda x: x["PA_CODUNI"].astype(str))
+    )
+
+    df_dim_estab["label_estabelecimento"] = df_dim_estab["PA_CODUNI"] + " - " + df_dim_estab["FANTASIA"]
+
+    df_dim_estab.to_parquet(output_path, index=False)
+
+    return output_path
+
+
+
+# Colunas que irão para o arquivo final
+col_interesse = ["PA_MUNPCN", "PA_PROC_ID", "PA_TPFIN", "PA_NIVCPL", "PA_CIDPRI", 
+           "PA_SUBFIN", "PA_DOCORIG", "PA_UFDIF", "PA_MNDIF", "PA_INDICA", 
+           "PA_MVM", "PA_CMP", "PA_SEXO", "PA_IDADE", "PA_OBITO", "PA_ENCERR", 
+           "PA_PERMAN", "PA_ALTA", "PA_TRANSF", "PA_CODUNI", "PA_AUTORIZ", 
+           "PA_CBOCOD", "PA_QTDPRO", "PA_QTDAPR", "PA_VALPRO", "PA_VALAPR"]
+
+#baixar_dbc(grupo="PA", estado = 'CE', anos = range(2018, 2021), meses = [1, 2])
+#conv_dbc_para_pqt(pasta_origem=PASTA_DBC, pasta_destino=PASTA_SILVER)
+#tratar_dados_sia(pasta=PASTA_SILVER, colunas = col_interesse, arquivo_saida = 'arquivo_silver.parquet')
+move_arquivo("arquivo_silver.parquet", pasta_destino=PASTA_SILVER)
+#estab_ce_label()
+#download_proc_label()

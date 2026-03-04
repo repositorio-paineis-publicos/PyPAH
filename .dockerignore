@@ -1,0 +1,16 @@
+venv_global/
+ETL/venv_lin/
+ETL/notebooks/
+ETL/requirements_lin.txt/
+__pycache__/
+.ipynb_checkpoints/
+dados_sia/Bronze/
+dados_sia/Silver/
+dados_sia/dados_dbc/
+Streamlit/dash_teste.py
+Streamlit/teste.ipynb
+.git/
+.env
+db.duckdb.wal
+requirements_global.txt
+requirements.txt
