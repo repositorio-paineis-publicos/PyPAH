@@ -270,7 +270,7 @@ docker compose up --build -d pypah-dev
 Para apenas executar o dashboard:
 
 ```bash
-docker compose up --build -d pypah-user
+docker compose up --build -d pypah-APP
 ```
 
 ---
@@ -311,7 +311,7 @@ Portas padrão:
 
 | Container | Porta |
 |--------|------|
-| user | 8501 |
+| app | 8501 |
 | dev | 8502 |
 
 Caso deseje alterar, edite o arquivo:
