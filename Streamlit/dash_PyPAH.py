@@ -6,14 +6,15 @@ import duckdb
 from pathlib import Path
 
 import requests
-r = requests.get(DB_URL, stream=True)
-with open(DB_PATH, "wb") as f:
-    for chunk in r.iter_content(8192):
-        f.write(chunk)
 
 
 DB_PATH = "/tmp/db.duckdb"
 DB_URL = "https://github.com/monteirogmb/pypah-dataset/releases/download/gold-v1/db.duckdb"
+
+r = requests.get(DB_URL, stream=True)
+with open(DB_PATH, "wb") as f:
+    for chunk in r.iter_content(8192):
+        f.write(chunk)
 
 if not os.path.exists(DB_PATH):
     r = requests.get(DB_URL)
