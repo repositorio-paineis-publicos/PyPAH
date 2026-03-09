@@ -1,27 +1,118 @@
-Esse repositório demonstra como criar um dashboard usando Streamlit na linguagem de programação Python.
-A importância do dashboard se demonstra na maior clareza que os dados ganham para usuários comuns, como a população no geral, como também para usuários que trabalham diretamente com esses dados e com essa maior clareza, podem entender o que está acontecendo e tomar melhores decisões sobre os mesmos.
+# PyPAH
 
-No contexto desse projeto, PyPAH, estamos usando dados da saúde, vindos do DATASUS, banco de dados do SUS(Sistema Único de Saúde) do Governo do Brasil. Mais precisamente, estamos demonstrando uma forma de lidar com os dados vindo do Sistema de Internação Ambulatorial(SIA), a Produção Ambulatorial(PA) com Python, fazendo todo o processo de Extração do FTP do DATASUS, Transformação dos dados com limpeza e filtros, por fim a Carga do resultado obtido em um banco de dados que servirá o Streamlit, biblioteca do Python que gera uma aplicação web de dashboard.
+<p align="center">
 
-Requisitos para utilização correta desse projeto:
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Docker](https://img.shields.io/badge/Docker-29.2.1-blue)
+![WSL](https://img.shields.io/badge/WSL-2.6.1.0-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
+![DuckDB](https://img.shields.io/badge/DuckDB-Analytics-yellow)
+![Parquet](https://img.shields.io/badge/Parquet-Columnar%20Storage-purple)
+![Data Pipeline](https://img.shields.io/badge/Data%20Pipeline-Bronze%2FSilver%2FGold-orange)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-- Ter instalado o Python.
-- Ter instalado o Docker.
-- Seu Sistema Operacional deve ser Linux ou caso seja Windows, tenha o WSL instalado.
+</p>
 
-O Python deve ser a versão 3.11
-Recomendo que o Docker e WSL estejam na mesma versão que usei, sendo:
-- Docker 29.2.1
-- WSL 2.6.1.0	
+---
 
-WSL(Windows SubSystem for Linux) servirá para executar um sistema Linux nativo no Windows, que é necessário para utilização do Docker e da biblioteca PySUS.
-Docker será utilizado para a criação do ambiente virtual que instalará as dependências na sua máquina.
+Este repositório demonstra como criar um **dashboard utilizando Streamlit na linguagem de programação Python**.
 
+A importância de dashboards está na capacidade de **tornar dados complexos mais claros e acessíveis**, permitindo que:
 
-Recomendo também que tenha instalado uma IDE, como o Visual Studio Code para executar os códigos, mas caso queira, também pode executar apenas via terminal.
+- cidadãos compreendam melhor informações públicas
+- analistas explorem dados com mais facilidade
+- gestores tomem decisões mais informadas
 
+No contexto deste projeto, **PyPAH**, utilizamos dados de saúde provenientes do **DATASUS**, banco de dados do **SUS (Sistema Único de Saúde)** do Governo do Brasil.
 
-## Organização das Pastas do Projeto
+Mais especificamente, utilizamos dados do **Sistema de Informações Ambulatoriais (SIA)**, focando na **Produção Ambulatorial (PA)**.
+
+O projeto demonstra uma forma de lidar com dados públicos utilizando Python, realizando todo o processo de:
+
+- **Extração** de dados do FTP do DATASUS
+- **Transformação** com limpeza e filtros
+- **Carga** em um banco de dados analítico
+
+O resultado final é servido em um **dashboard interativo utilizando Streamlit**.
+
+---
+
+# Arquitetura do Pipeline
+
+![Arquitetura do Pipeline](docs/arquitetura_PyPAH.png)
+
+O pipeline de dados segue o modelo de arquitetura em camadas utilizado em engenharia de dados:
+
+```text
+DATASUS FTP
+     ↓
+Extração (Python / PySUS)
+     ↓
+Bronze (Parquet)
+     ↓
+Silver (dados tratados)
+     ↓
+Gold (tabelas agregadas)
+     ↓
+DuckDB
+     ↓
+Streamlit Dashboard
+```
+
+### Descrição das camadas
+
+**Extração**  
+Coleta automática dos dados brutos do FTP do DATASUS utilizando Python.
+
+**Bronze**  
+Armazenamento dos dados brutos convertidos para Parquet, mantendo a estrutura original.
+
+**Silver**  
+Etapa de limpeza, filtragem e transformação dos dados para torná-los consistentes.
+
+**Gold**  
+Criação de tabelas agregadas otimizadas para consultas analíticas e visualização.
+
+**DuckDB**  
+Banco analítico local que armazena as tabelas Gold.
+
+**Streamlit**  
+Aplicação web interativa para exploração e visualização dos dados.
+
+---
+
+# Tecnologias Utilizadas
+
+| Tecnologia | Uso |
+|----------|---------------------------|
+| Python | Pipeline ETL |
+| DuckDB | Banco analítico |
+| Streamlit | Dashboard |
+| Docker | Containerização |
+| Parquet | Armazenamento colunar |
+| PySUS | Acesso aos dados do DATASUS |
+| WSL | Ambiente Linux no Windows |
+
+---
+
+# Dataset
+
+Os dados utilizados neste projeto são provenientes do **DATASUS**, base pública do Sistema Único de Saúde (SUS) mantida pelo Ministério da Saúde.
+
+Fonte oficial:
+
+https://datasus.saude.gov.br/
+
+Especificamente utilizamos dados do:
+
+- Sistema de Informações Ambulatoriais (SIA)
+- Produção Ambulatorial (PA)
+
+Os dados são disponibilizados em formato `.dbc` no FTP público do DATASUS e são convertidos para **Parquet** durante o processo de ETL.
+
+---
+
+# Organização das Pastas do Projeto
 
 ```text
 PyPAH
@@ -31,7 +122,7 @@ PyPAH
 │   ├── Bronze/
 │   ├── Silver/
 │   ├── Gold/
-│   └── rótulos/
+│   └── rotulos/
 │
 ├── db/
 │   └── db.duckdb
@@ -55,84 +146,185 @@ PyPAH
 ├── .dockerignore
 ├── docker-compose.yml
 └── .gitignore
-```text
+```
 
+---
 
-A pasta dados_sia é onde ficam guardados os dados que serão utilizados dentro do projeto
-Ela contém 5 pastas internas:
-dados_dbc sendo onde serão guardados os dados brutos ainda compactados em .dbc baixados do FTP do DataSUS.
-Bronze onde ficam os dados descompactados já convertidos em Parquet, cada pasta dentro dele será referente a um mês.
-Silver onde ficam os dados após filtragem, tratamento e adição de colunas.
-Gold onde ficam os dados finais depois de agregados em tabelas menores prontos para uso no Streamlit.	
-rótulos onde ficam as tabelas dimensão (como se fosse um dicionário) para rotular colunas nos filtros do dashboard
+# Estrutura de Dados
 
-A pasta db é onde fica guardado um arquivo db.duckdb que é um banco de dados otimizado para o dashboard, dentro dele ficam as tabelas Gold
+A pasta **dados_sia** armazena os dados utilizados dentro do projeto.
 
-A pasta Docker contém os arquivos responsáveis pela containerização do Docker
-Temos o Dockerfile.dev que criará um container com as dependências integrais para todo o projeto.
-O Dockerfile.user, também cria um container, mas apenas com as dependências para abrir o dashboard, sendo esse container menor e mais rápido de ser instalado.
-O entrypoint_user.sh é executado automaticamente quando é criado o container de user, ele abrirá automaticamente o dashboard na porta designada no arquivo, mas antes ele faz um check se localmente já possui o arquivo db.duckdb, que é o banco de dados que serve o streamlit como disse anteriormente, caso não haja, ele baixa automaticamente o release com 3 anos que fiz no GitHub.
+Ela contém cinco subpastas:
 
-A pasta ETL, como o nome sugere, é onde ficam os arquivos que fazem a ETL dos dados
-No fun_sia.py estão as funções e as chamadas dela para criar os bancos Bronze e Silver e baixar os rótulos.
-Já em gold.py é onde o banco gold é criado no db.duckdb.
+**dados_dbc**  
+Dados brutos compactados em `.dbc` baixados do FTP do DATASUS.
 
-A pasta requirements tem dois arquivos .txt que designam as dependências que devem ser instaladas e as versões adequadas para cada container.
+**Bronze**  
+Dados descompactados e convertidos para **Parquet**.
 
-A pasta Streamlit tem dentro dela o arquivo que executa o app, a partir da execução do dash_PyPAH.py podemos visualizar o resultado de todo o processo de ETL e acessar os dados e utilizar os filtros para melhorar o entendimento dos mesmos.
+Cada pasta representa **um mês de dados**.
 
-.dockerignore sendo um arquivo que fará o Docker ignorar pastas e arquivos designados dentro do mesmo
-.gitignore o mesmo, mas para o GitHub
+**Silver**  
+Dados após filtragem, limpeza e criação de novas colunas.
 
-docker-compose.yml é onde está sendo configurado a criação dos containers
+**Gold**  
+Dados agregados e prontos para análise e visualização.
 
-A princípio, as pastas dados_sia/ e db/ não estão no GitHub, mas na execução do fluxo eles serão criados, no fun_sia, dados_sia será criado automaticamente e em gold.py, db/ será criado.
+**rotulos**  
+Tabelas dimensão utilizadas para rotular colunas e filtros do dashboard.
 
+---
 
+# Banco de Dados
 
-comandos para executar o projeto:
+A pasta **db** contém o arquivo:
 
-clonar o projeto do GitHub localmente:
-```text
+```
+db.duckdb
+```
+
+Ele utiliza **DuckDB**, um banco de dados analítico otimizado para processamento local e ideal para dashboards.
+
+As tabelas da camada **Gold** são armazenadas nele.
+
+---
+
+# Docker
+
+A pasta **Docker** contém os arquivos responsáveis pela containerização.
+
+### Dockerfile.dev
+
+Cria um container com todas as dependências do projeto para desenvolvimento completo.
+
+### Dockerfile.user
+
+Cria um container mais leve contendo apenas as dependências necessárias para executar o dashboard.
+
+### entrypoint_user.sh
+
+Script executado automaticamente ao iniciar o container user.
+
+Ele:
+
+1. verifica se o arquivo `db.duckdb` existe localmente
+2. caso não exista, baixa automaticamente um release com **3 anos de dados**
+3. inicia o dashboard Streamlit
+
+---
+
+# Dashboard
+
+### Visualização geral
+
+![Dashboard geral](docs/app_sem_filtro.png)
+
+### Aplicação de filtros
+
+![Dashboard com filtros](docs/app_com_filtro.png)
+
+A aplicação permite explorar os dados através de filtros interativos e visualizar indicadores de produção ambulatorial.
+
+---
+
+# Execução do Projeto
+
+## Clonar o repositório
+
+```bash
 git clone https://github.com/repositorio-paineis-publicos/PyPAH
-```text
+```
 
-abra a aplicação do Docker Desktop na sua máquina
+---
 
-no terminal do VS Code e no próprio terminal, abra a pasta do projeto
-pode usar: 
+## Acessar a pasta do projeto
 
-```text
-cd caminho_do_projeto #(substitua pelo caminho real)
-```text
+```bash
+cd caminho_do_projeto
+```
 
-caso esteja em um SO Windows
-escreva:
-```text
-wsl #ativa o wsl no projeto
-```text
-e então no terminal execute o comando:
+---
 
-```text
-docker compose up --build -d pypah-dev #(ou pypah-user, caso queira acessar só o dash)
-```text
-nesse momento, o seu container começará a ser criado, a instalação de dependências, ao final terá uma mensagem de confirmação da criação do container
+## Caso esteja utilizando Windows, ativar o WSL
 
-após isso, clique no atalho 'Ctrl + Shift + P' para abrir a barra do VS
-escreva 'Dev Containers: Attach to Running Container', clique
-aparecerá o nome do container, clique nele
-abrirá uma nova aba do VS agora com o ambiente virtual pronto para execução
+```bash
+wsl
+```
 
-para executar o dash, execute o comando:
+---
 
-```text
+## Construir o container Docker
+
+Para desenvolvimento completo:
+
+```bash
+docker compose up --build -d pypah-dev
+```
+
+Para apenas executar o dashboard:
+
+```bash
+docker compose up --build -d pypah-user
+```
+
+---
+
+## Conectar ao container no VS Code
+
+Pressione:
+
+```
+Ctrl + Shift + P
+```
+
+Digite:
+
+```
+Dev Containers: Attach to Running Container
+```
+
+Selecione o container desejado.
+
+---
+
+## Executar o dashboard
+
+```bash
 streamlit run Streamlit/dash_PyPAH.py
-```text
+```
 
-automaticamente será aberto no seu navegador o app
-caso não abra automaticamente, escreva no navegador:
-localhost:numero_da_porta
+O navegador abrirá automaticamente.
 
-fique atento ao número das portas configuradas quando acessar o Streamlit, pois o container de user e dev tem portas mapeadas diferentes
-quando é o do user, a porta é 8501 e de dev 8502, caso queira alterar, mude no arquivo docker-compose.yml
+Caso não abra, acesse:
 
+```
+localhost:PORTA
+```
+
+Portas padrão:
+
+| Container | Porta |
+|--------|------|
+| user | 8501 |
+| dev | 8502 |
+
+Caso deseje alterar, edite o arquivo:
+
+```
+docker-compose.yml
+```
+
+---
+
+# Observação
+
+Inicialmente, as pastas:
+
+- `dados_sia/`
+- `db/`
+
+não estão presentes no repositório.
+
+Elas são criadas automaticamente durante a execução do pipeline.
+
+---

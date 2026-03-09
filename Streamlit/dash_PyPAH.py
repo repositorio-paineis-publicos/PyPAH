@@ -30,7 +30,7 @@ def optimize_plotly(fig):
 @st.cache_data(show_spinner=True)
 def anos_disponiveis():
     return (
-        con.execute("SELECT DISTINCT Ano FROM gold_fact_qtd_val_TT ORDER BY Ano")
+        con.execute("SELECT DISTINCT Ano FROM gold_fact_qtd_val_3y ORDER BY Ano")
         .df()["Ano"]
         .tolist()
     )
@@ -42,7 +42,7 @@ def meses_disponiveis_multi(anos):
 
     q = f"""
         SELECT Mes
-        FROM gold_fact_qtd_val_TT
+        FROM gold_fact_qtd_val_3y
         WHERE Ano IN ({anos_sql})
         GROUP BY Mes
         ORDER BY MIN(data_ref)
@@ -72,7 +72,7 @@ def load_dim_procedimento():
 @st.cache_data(show_spinner=True)
 def municipios_disponiveis():
     return (
-        con.execute("SELECT DISTINCT PA_MUNPCN FROM gold_fact_qtd_val_TT")
+        con.execute("SELECT DISTINCT PA_MUNPCN FROM gold_fact_qtd_val_3y")
         .df()["PA_MUNPCN"]
         .sort_values()
         .tolist()
@@ -225,7 +225,7 @@ if municipios:
 
 query = """
 SELECT * 
-FROM gold_fact_qtd_val_TT
+FROM gold_fact_qtd_val_3y
 """
 
 if where:

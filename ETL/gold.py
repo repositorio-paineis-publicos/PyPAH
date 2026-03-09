@@ -2,9 +2,14 @@ from pathlib import Path
 import duckdb
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 DB_PATH = BASE_DIR / "db" / "db.duckdb"
 SILVER_PATH = BASE_DIR / "dados_sia" / "Silver" / "**" / "arquivo_silver.parquet"
+
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+con = duckdb.connect(str(DB_PATH))
+print("Banco criado em:", DB_PATH)
+con.close()
+
 
 print("DB_PATH:", DB_PATH)
 print("SILVER_PATH:", SILVER_PATH)
