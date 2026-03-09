@@ -124,6 +124,11 @@ PyPAH
 │   ├── Gold/
 │   └── rotulos/
 │
+├── docs/
+│   ├── arquitetura_PyPAH.png
+│   ├── app_com_filtro.png
+│   └── app_sem_filtro.png
+|
 ├── db/
 │   └── db.duckdb
 │
@@ -145,6 +150,7 @@ PyPAH
 │
 ├── .dockerignore
 ├── docker-compose.yml
+├── LICENSE
 └── .gitignore
 ```
 
