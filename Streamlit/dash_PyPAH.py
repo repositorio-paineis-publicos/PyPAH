@@ -7,26 +7,18 @@ from pathlib import Path
 
 import requests
 
+DATA_DIR = Path("/data")
+DB_PATH = DATA_DIR / "pypah.duckdb"
 
-DB_PATH = "/tmp/db.duckdb"
-DB_URL = "https://github.com/monteirogmb/pypah-dataset/releases/download/gold-v1/db.duckdb"
+URL = "https://github.com/monteirogmb/pypah-dataset/releases/download/gold-v1/pypah.duckdb"
 
-r = requests.get(DB_URL, stream=True)
-with open(DB_PATH, "wb") as f:
-    for chunk in r.iter_content(8192):
-        f.write(chunk)
+DATA_DIR.mkdirs(exist_ok = True)
 
-if not os.path.exists(DB_PATH):
-    r = requests.get(DB_URL)
+if not DB_PATH.exists()
+    r = requests.get(URL)
     with open(DB_PATH, "wb") as f:
         f.write(r.content)
-DB_PATH = "/tmp/db.duckdb"
-DB_URL = "https://github.com/monteirogmb/pypah-dataset/releases/download/gold-v1/db.duckdb"
 
-if not os.path.exists(DB_PATH):
-    r = requests.get(DB_URL)
-    with open(DB_PATH, "wb") as f:
-        f.write(r.content)
         
 ROTULOS_URL = "https://github.com/monteirogmb/pypah-dataset/releases/download/td-v1"
 
