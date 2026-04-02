@@ -9,10 +9,21 @@ RUN pip install --no-cache-dir -r requirements_user.txt
 
 # Copia só o necessário para o app
 COPY Streamlit /app/Streamlit
-COPY dados_sia/rotulos /app/dados_sia/rotulos
 
-COPY docker/entrypoint_user.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
 EXPOSE 8501
-ENTRYPOINT ["/entrypoint.sh"]
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY requirements/requirements_user.txt .
+RUN pip install --no-cache-dir -r requirements_user.txt
+
+COPY Streamlit /app/Streamlit
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "Streamlit/dash_PyPAH.py", "--server.port=8501", "--server.address=0.0.0.0"]
