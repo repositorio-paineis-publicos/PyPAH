@@ -6,17 +6,22 @@ services:
       dockerfile: docker/Dockerfile.dev
     container_name: pypah-dev
     volumes:
-      - ./dados_sia:/app/dados_sia
-      - ./db:/app/db
       - ./ETL:/app/ETL
       - ./Streamlit:/app/Streamlit
-      - ./.env:/app/.env
-    env_file:
-      - .env
     ports:
       - "8502:8501"
     stdin_open: true
     tty: true
+
+  pypah-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: pypah-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
 
   pypah-app:
     build:
@@ -27,7 +32,7 @@ services:
       - "8501:8501"
     volumes:
       - ./Streamlit:/app/Streamlit
-      - ./.env:/app/.env
-      - ./dados_sia:/app/dados_sia
     env_file:
       - .env
+    depends_on:
+      - pypah-api

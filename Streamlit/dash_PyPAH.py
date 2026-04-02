@@ -1,102 +1,58 @@
+import requests
 import os
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import duckdb
-from pathlib import Path
 
-import requests
-
-DATA_DIR = Path("data")
-DB_PATH = DATA_DIR / "pypah.duckdb"
-
-URL = "https://github.com/monteirogmb/pypah-dataset/releases/download/gold-v1/db.duckdb"
-def ensure_db():
-    DATA_DIR.mkdir(parents = True, exist_ok = True)
-    
-    if not DB_PATH.exists():
-        r = requests.get(URL, timeout=120)
-        r.raise_for_status()
-        
-        with open(DB_PATH, "wb") as f:
-            f.write(r.content)
-
-ensure_db()
-        
-ROTULOS_URL = "https://github.com/monteirogmb/pypah-dataset/releases/download/td-v1"
-
-@st.cache_resource
-def get_con():
-    return duckdb.connect(str(DB_PATH), read_only=True)
-
-con = get_con()
+API_URL = os.environ["API_URL"]
 
 
-@st.cache_data
-def optimize_plotly(fig):
-    fig.update_layout(
-        hovermode="closest",
-        transition_duration=0
-    )
-    return fig
+def _get(endpoint: str, params: dict = None):
+    url = f"{API_URL}/api/{endpoint}"
+    response = requests.get(url, params=params, timeout=30)
+    response.raise_for_status()
+    return response.json()
 
 
-@st.cache_data(show_spinner=True)
+@st.cache_data(ttl=3600)
 def anos_disponiveis():
-    return (
-        con.execute("SELECT DISTINCT Ano FROM gold_fact_qtd_val_3y ORDER BY Ano")
-        .df()["Ano"]
-        .tolist()
-    )
+    return _get("anos")
 
 
-@st.cache_data(show_spinner=True)
+@st.cache_data(ttl=3600)
 def meses_disponiveis_multi(anos):
-    anos_sql = ",".join(map(str, anos))
-
-    q = f"""
-        SELECT Mes
-        FROM gold_fact_qtd_val_3y
-        WHERE Ano IN ({anos_sql})
-        GROUP BY Mes
-        ORDER BY MIN(data_ref)
-    """
-
-    return con.execute(q).df()["Mes"].tolist()
+    return _get("meses", params={"anos": anos})
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=3600)
+def municipios_disponiveis():
+    return _get("municipios")
+
+
+@st.cache_data(ttl=3600)
 def load_dim_estabelecimento():
-    url = f"{ROTULOS_URL}/dim_estabelecimento_ce.parquet"
+    return pd.DataFrame(_get("estabelecimentos"))
 
-    df = pd.read_parquet(
-        url,
-        columns=["PA_CODUNI", "label_estabelecimento"]
-    )
 
-    return df
-
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=3600)
 def load_dim_procedimento():
-    url = f"{ROTULOS_URL}/dim_procedimento.parquet"
-
-    df = pd.read_parquet(
-        url,
-        columns=["PA_PROC_ID", "label_procedimento"]
-    )
-
-    return df
+    return pd.DataFrame(_get("procedimentos"))
 
 
 @st.cache_data(show_spinner=True)
-def municipios_disponiveis():
-    return (
-        con.execute("SELECT DISTINCT PA_MUNPCN FROM gold_fact_qtd_val_3y")
-        .df()["PA_MUNPCN"]
-        .sort_values()
-        .tolist()
-    )
+def dados_filtrados(anos, meses, municipios, pa_codunis, pa_proc_ids):
+    params = {}
+    if anos:
+        params["anos"] = anos
+    if meses:
+        params["meses"] = meses
+    if municipios:
+        params["municipios"] = municipios
+    if pa_codunis:
+        params["pa_codunis"] = pa_codunis
+    if pa_proc_ids:
+        params["pa_proc_ids"] = pa_proc_ids
 
+    return pd.DataFrame(_get("dados", params=params))
 
 st.set_page_config(layout='wide')
 
@@ -220,37 +176,13 @@ else:
 # Construção da query SQL com filtros
 
 
-where = []
-
-if anos_sel:
-    where.append(f"ANO IN ({','.join(map(str, anos_sel))})")
-
-if meses:
-    meses_sql = ",".join(f"'{m}'" for m in meses)
-    where.append(f"MES IN ({meses_sql})")
-
-if pa_codunis:
-    cods_sql = ",".join(f"'{c}'" for c in pa_codunis)
-    where.append(f"PA_CODUNI IN ({cods_sql})")
-
-if pa_proc_ids:
-    procs_sql = ",".join(f"'{p}'" for p in pa_proc_ids)
-    where.append(f"PA_PROC_ID IN ({procs_sql})")
-
-if municipios:
-    mun_sql = ",".join(f"'{m}'" for m in municipios)
-    where.append(f"PA_MUNPCN IN ({mun_sql})")
-
-
-query = """
-SELECT * 
-FROM gold_fact_qtd_val_3y
-"""
-
-if where:
-    query += " WHERE " + " AND ".join(where)
-
-df_filtro = con.execute(query).df()
+df_filtro = dados_filtrados(
+    anos=anos_sel,
+    meses=meses,
+    municipios=municipios,
+    pa_codunis=pa_codunis,
+    pa_proc_ids=pa_proc_ids
+)
 
 
 
