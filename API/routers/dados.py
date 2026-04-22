@@ -144,12 +144,21 @@ def dados_filtrados(
         proc_sql = ",".join(f"'{p}'" for p in pa_proc_ids)
         where.append(f"PA_PROC_ID IN ({proc_sql})")
 
-    query = f"SELECT * FROM read_parquet('{CONSOLIDATED}')"
+    where_clause = ("WHERE " + " AND ".join(where)) if where else ""
 
-    if where:
-        query += " WHERE " + " AND ".join(where)
+    query = f"""
+        SELECT
+            data_ref,
+            SUM(PA_VALPRO) AS PA_VALPRO,
+            SUM(PA_VALAPR) AS PA_VALAPR,
+            SUM(PA_QTDPRO) AS PA_QTDPRO,
+            SUM(PA_QTDAPR) AS PA_QTDAPR
+        FROM read_parquet('{CONSOLIDATED}')
+        {where_clause}
+        GROUP BY data_ref
+        ORDER BY data_ref
+    """
 
     result = get_con().execute(query).df().to_dict(orient="records")
-
     set_cached(key, result)
     return result

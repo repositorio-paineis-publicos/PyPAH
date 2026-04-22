@@ -193,6 +193,8 @@ df_filtro = dados_filtrados(
     pa_proc_ids=pa_proc_ids
 )
 
+# Renomeia tipos para exibição nos gráficos
+df_filtro["data_ref"] = pd.to_datetime(df_filtro["data_ref"])
 
 
 
@@ -209,38 +211,19 @@ MAPA_CORES = {
 
 # Valores
 
-valores_bar = (df_filtro.melt(
-    id_vars='data_ref',
-    value_vars=['PA_VALPRO', 'PA_VALAPR'],
-    var_name='tipo',
-    value_name='valor'
-)
-.groupby(['tipo', 'data_ref'], as_index=False)
-.agg(valor=('valor', 'sum'))
-).sort_values("tipo")
-
-valores_bar['tipo'] = valores_bar['tipo'].map({
-    'PA_VALPRO': 'Produzido',
-    'PA_VALAPR': 'Aprovado'
-})
+valores_bar = df_filtro.melt(
+    id_vars="data_ref",
+    value_vars=["PA_VALPRO", "PA_VALAPR"],
+    var_name="tipo", value_name="valor"
+).replace({"PA_VALPRO": "Produzido", "PA_VALAPR": "Aprovado"}).sort_values("tipo")
 
 # Quantidade
 
-quant_bar = (df_filtro.melt(
-    id_vars='data_ref',
-    value_vars=['PA_QTDPRO', 'PA_QTDAPR'],
-    var_name='tipo',
-    value_name='quantidade'
-)
-.groupby(['data_ref', 'tipo'], as_index=False)
-.agg(quantidade=('quantidade', 'sum'))
-).sort_values(['tipo'])
-
-
-quant_bar['tipo'] = quant_bar['tipo'].map({
-    'PA_QTDPRO': 'Produzido',
-    'PA_QTDAPR': 'Aprovado'
-})
+quant_bar = df_filtro.melt(
+    id_vars="data_ref",
+    value_vars=["PA_QTDPRO", "PA_QTDAPR"],
+    var_name="tipo", value_name="quantidade"
+).replace({"PA_QTDPRO": "Produzido", "PA_QTDAPR": "Aprovado"}).sort_values("tipo")
 
 ## =========================
 ## Tabelas gráficos de linha 
@@ -248,50 +231,12 @@ quant_bar['tipo'] = quant_bar['tipo'].map({
 
 # Valores
 
-df_linha_val = (
-    df_filtro
-    .groupby("data_ref", as_index=False)
-    .agg({
-        "PA_VALPRO": "sum",
-        "PA_VALAPR": "sum"
-    })
-)
-
-df_linha_val_long = df_linha_val.melt(
-    id_vars="data_ref",
-    value_vars=["PA_VALPRO", "PA_VALAPR"],
-    var_name="tipo",
-    value_name="valor"
-).sort_values("tipo")
-
-df_linha_val_long["tipo"] = df_linha_val_long["tipo"].map({
-    "PA_VALPRO": "Produzido",
-    "PA_VALAPR": "Aprovado"
-})
+df_linha_val_long = valores_bar.copy()
 
 
 # Quantidade
 
-df_linha_qtd = (
-    df_filtro
-    .groupby("data_ref", as_index=False)
-    .agg({
-        "PA_QTDPRO": "sum",
-        "PA_QTDAPR": "sum"
-    })
-)
-
-df_linha_qtd_long = df_linha_qtd.melt(
-    id_vars="data_ref",
-    value_vars=["PA_QTDPRO", "PA_QTDAPR"],
-    var_name="tipo",
-    value_name="quantidade"
-).sort_values("tipo")
-
-df_linha_qtd_long["tipo"] = df_linha_qtd_long["tipo"].map({
-    "PA_QTDPRO": "Produzido",
-    "PA_QTDAPR": "Aprovado"
-})
+df_linha_qtd_long = quant_bar.copy()
 
 
 ## =========================
