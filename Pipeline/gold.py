@@ -121,8 +121,8 @@ def consolidar_gold_local(
         COPY (
             SELECT *
             FROM read_parquet('{pasta_particoes}/**/*.parquet', hive_partitioning=true)
-            ORDER BY data_ref
-        ) TO '{arquivo_saida}' (FORMAT PARQUET, COMPRESSION 'snappy')
+            ORDER BY Ano, Mes, PA_MUNPCN, PA_CODUNI, PA_PROC_ID
+        ) TO '{arquivo_saida}' (FORMAT PARQUET, COMPRESSION 'ztsd')
     """)
 
     con.close()

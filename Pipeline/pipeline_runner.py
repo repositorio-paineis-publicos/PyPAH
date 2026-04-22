@@ -395,7 +395,7 @@ def main():
     if not args.skip_dims and (sucessos > 0 or not existe_consolidated):
         atualizar_dimensoes(s3, bucket)
     elif args.skip_dims:
-        log.info("Atualizacao de dimensoes pulada (--skip-dims).")
+        log.info("Atualizacao de dimensoes puladas (--skip-dims).")
     else:
         log.info("Dimensoes ja estao atualizadas.")
 
