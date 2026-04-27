@@ -211,20 +211,27 @@ MAPA_CORES = {
 
 # Valores
 
-valores_bar = df_filtro.melt(
-    id_vars="data_ref",
-    value_vars=["PA_VALPRO", "PA_VALAPR"],
-    var_name="tipo", value_name="valor"
-).replace({"PA_VALPRO": "Produzido", "PA_VALAPR": "Aprovado"}).sort_values("tipo")
+valores_bar = (df_filtro.copy()
+    .assign(Ano=pd.to_datetime(df_filtro["data_ref"]).dt.year)
+    .groupby("Ano", as_index=False)
+    .agg(PA_VALPRO=("PA_VALPRO", "sum"), PA_VALAPR=("PA_VALAPR", "sum"))
+    .melt(id_vars="Ano", value_vars=["PA_VALPRO", "PA_VALAPR"],
+          var_name="tipo", value_name="valor")
+    .replace({"PA_VALPRO": "Produzido", "PA_VALAPR": "Aprovado"})
+    .sort_values("tipo")
+)
 
 # Quantidade
 
-quant_bar = df_filtro.melt(
-    id_vars="data_ref",
-    value_vars=["PA_QTDPRO", "PA_QTDAPR"],
-    var_name="tipo", value_name="quantidade"
-).replace({"PA_QTDPRO": "Produzido", "PA_QTDAPR": "Aprovado"}).sort_values("tipo")
-
+quant_bar = (df_filtro.copy()
+    .assign(Ano=pd.to_datetime(df_filtro["data_ref"]).dt.year)
+    .groupby("Ano", as_index=False)
+    .agg(PA_QTDPRO=("PA_QTDPRO", "sum"), PA_QTDAPR=("PA_QTDAPR", "sum"))
+    .melt(id_vars="Ano", value_vars=["PA_QTDPRO", "PA_QTDAPR"],
+          var_name="tipo", value_name="quantidade")
+    .replace({"PA_QTDPRO": "Produzido", "PA_QTDAPR": "Aprovado"})
+    .sort_values("tipo")
+)
 ## =========================
 ## Tabelas gráficos de linha 
 ## =========================
@@ -289,23 +296,23 @@ fig_valores_lin.update_layout(
 
 fig_valores_bar = px.bar(
     valores_bar,
-    x="data_ref",
+    x="Ano",
     y="valor",
     color="tipo",
     barmode="group",
-    title="Valor Produzido x Aprovado por Mês/Ano",
+    title="Valor Produzido x Aprovado por Ano",
     color_discrete_map=MAPA_CORES
 )
 
 fig_valores_bar.update_traces(
     hovertemplate=
-        "Mês/Ano: %{x}<br>" +
+        "Ano: %{x}<br>" +
         "Valor: %{y:,.0f}<extra></extra>")
 
 fig_valores_bar = optimize_plotly(fig_valores_bar)
 
 fig_valores_bar.update_layout(
-    yaxis_title="Valor (R$)", xaxis_title="Mês/Ano",
+    yaxis_title="Valor (R$)", xaxis_title="Ano",
     legend=dict(
         traceorder="normal"
     )
@@ -361,24 +368,24 @@ fig_quant_lin.update_layout(
 
 fig_quant_bar = px.bar(
     quant_bar,
-    x="data_ref",
+    x="Ano",
     y="quantidade",
     color="tipo",
     barmode="group",
-    title="Quantidade Produzida x Aprovada por Mês/Ano",
+    title="Quantidade Produzida x Aprovada por Ano",
     color_discrete_map=MAPA_CORES
 )
 
 fig_quant_bar.update_traces(
     hovertemplate=
-        "Mês/Ano: %{x}<br>" +
+        "Ano: %{x}<br>" +
         "Quantidade: %{y:,.0f}<extra></extra>"
 )
 
 fig_quant_bar = optimize_plotly(fig_quant_bar)
 
 fig_quant_bar.update_layout(
-    yaxis_title="Quantidade", xaxis_title="Mês/Ano",
+    yaxis_title="Quantidade", xaxis_title="Ano",
     legend=dict(
         traceorder="normal"
     )
