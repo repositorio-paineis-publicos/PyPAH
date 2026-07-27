@@ -4,15 +4,20 @@ pipeline_runner.py
 Orquestrador do pipeline incremental do PyPAH.
 
 Fluxo de execucao:
-  1. Lista particoes (ano/mes) existentes no R2.
-  2. Verifica se consolidated.parquet existe no R2.
+  1. Lista particoes (ano/mes) ja existentes (local ou R2, conforme STORAGE).
+  2. Verifica se consolidated.parquet ja existe.
   3. Calcula meses novos disponiveis no FTP do DATASUS.
-  4. Para cada mes novo: baixa .dbc -> converte -> trata -> agrega -> upload da particao.
-  5. Se houve novos meses OU consolidated nao existe: gera e faz upload do consolidated.parquet.
+  4. Para cada mes novo: baixa .dbc -> converte -> trata -> agrega -> grava a particao.
+  5. Se houve novos meses OU consolidated nao existe: gera e grava o consolidated.parquet.
   6. Atualiza tabelas dimensao (rotulos).
 
-Variaveis de ambiente obrigatorias:
-  R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET
+O destino de gravacao (filesystem local em DATA_ROOT ou bucket R2) e decidido
+pelo modulo storage.py conforme a variavel de ambiente STORAGE — este arquivo
+nao contem logica condicional de armazenamento.
+
+Variaveis de ambiente:
+  STORAGE=local -> requer DATA_ROOT
+  STORAGE=r2    -> requer R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET
 
 Uso:
   # Modo incremental (so meses novos):
@@ -25,7 +30,6 @@ Uso:
   python -m Pipeline.pipeline_runner --force-consolidate
 """
 
-import os
 import shutil
 import argparse
 import logging
@@ -33,8 +37,6 @@ from datetime import date
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
 
-import boto3
-from botocore.config import Config
 from dotenv import load_dotenv
 
 from Pipeline.fun_sia import (
@@ -45,7 +47,8 @@ from Pipeline.fun_sia import (
     download_proc_label,
     col_interesse,
 )
-from Pipeline.gold import processar_gold_particionado, consolidar_gold_r2
+from Pipeline.gold import processar_gold_particionado
+import storage
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -71,55 +74,7 @@ PASTA_BRONZE  = BASE_TMP / "bronze"
 PASTA_SILVER  = BASE_TMP / "silver"
 PASTA_ROTULOS = BASE_TMP / "rotulos"
 
-R2_GOLD_PREFIX      = "gold"
-R2_DIMS_PREFIX      = "dims"
-R2_CONSOLIDATED_KEY = f"{R2_GOLD_PREFIX}/consolidated.parquet"
-
 MESES_ATRASO_DATASUS = 2
-
-
-# -----------------------------------------------------------------------------
-# Helpers R2
-# -----------------------------------------------------------------------------
-
-def _s3_client():
-    endpoint = os.environ["R2_ENDPOINT"]
-    if not endpoint.startswith("http"):
-        endpoint = f"https://{endpoint}"
-    return boto3.client(
-        "s3",
-        endpoint_url=endpoint,
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        config=Config(signature_version="s3v4"),
-        region_name="auto",
-    )
-
-
-def listar_particoes_existentes(s3, bucket: str) -> set[tuple[int, int]]:
-    """Retorna set de (ano, mes) das particoes ja presentes no R2."""
-    existentes = set()
-    paginator = s3.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix=f"{R2_GOLD_PREFIX}/ano="):
-        for obj in page.get("Contents", []):
-            partes = obj["Key"].split("/")
-            try:
-                ano = int(partes[1].replace("ano=", ""))
-                mes = int(partes[2].replace("mes=", ""))
-                existentes.add((ano, mes))
-            except (IndexError, ValueError):
-                continue
-    log.info(f"Particoes ja existentes no R2: {len(existentes)}")
-    return existentes
-
-
-def consolidated_existe(s3, bucket: str) -> bool:
-    """Verifica se o consolidated.parquet ja existe no R2."""
-    try:
-        s3.head_object(Bucket=bucket, Key=R2_CONSOLIDATED_KEY)
-        return True
-    except Exception:
-        return False
 
 
 def calcular_meses_disponiveis(ano_inicio: int, mes_inicio: int) -> list[tuple[int, int]]:
@@ -134,30 +89,11 @@ def calcular_meses_disponiveis(ano_inicio: int, mes_inicio: int) -> list[tuple[i
     return meses
 
 
-def fazer_upload_particao(s3, bucket: str, arquivo_local: Path, ano: int, mes: int):
-    chave = f"{R2_GOLD_PREFIX}/ano={ano}/mes={mes:02d}/dados.parquet"
-    log.info(f"Upload particao -> s3://{bucket}/{chave}")
-    s3.upload_file(str(arquivo_local), bucket, chave)
-    log.info("Upload da particao concluido.")
-
-
-def fazer_upload_consolidated(s3, bucket: str, arquivo_local: Path):
-    log.info(f"Upload consolidated -> s3://{bucket}/{R2_CONSOLIDATED_KEY}")
-    s3.upload_file(str(arquivo_local), bucket, R2_CONSOLIDATED_KEY)
-    log.info("Upload do consolidated concluido.")
-
-
-def fazer_upload_dim(s3, bucket: str, arquivo_local: Path, nome_arquivo: str):
-    chave = f"{R2_DIMS_PREFIX}/{nome_arquivo}"
-    log.info(f"Upload dimensao -> s3://{bucket}/{chave}")
-    s3.upload_file(str(arquivo_local), bucket, chave)
-
-
 # -----------------------------------------------------------------------------
 # Pipeline por mes
 # -----------------------------------------------------------------------------
 
-def processar_mes(s3, bucket: str, ano: int, mes: int) -> bool:
+def processar_mes(ano: int, mes: int) -> bool:
     """
     Executa o pipeline de um unico mes: bronze -> silver -> gold -> upload particao.
 
@@ -234,8 +170,8 @@ def processar_mes(s3, bucket: str, ano: int, mes: int) -> bool:
             log.error(f"Gold nao gerado para {ano}/{mes:02d}.")
             return False
 
-        # -- Upload particao ---------------------------------------------------
-        fazer_upload_particao(s3, bucket, arquivo_gold, ano, mes)
+        # -- Grava particao (local ou R2, conforme STORAGE) ---------------------
+        storage.salvar_particao(arquivo_gold, ano, mes)
 
         # So limpa apos upload confirmado
         for p in [pasta_silver_mes, pasta_gold_mes]:
@@ -258,10 +194,10 @@ def processar_mes(s3, bucket: str, ano: int, mes: int) -> bool:
 # Consolidacao
 # -----------------------------------------------------------------------------
 
-def gerar_consolidated(s3, bucket: str):
+def gerar_consolidated():
     """
-    Le todas as particoes gold do R2, consolida em um unico parquet
-    e faz upload sobrescrevendo o consolidated.parquet anterior.
+    Le todas as particoes gold (local ou R2, conforme STORAGE), consolida em
+    um unico parquet e grava sobrescrevendo o consolidated.parquet anterior.
     """
     log.info("Gerando consolidated.parquet...")
 
@@ -270,20 +206,8 @@ def gerar_consolidated(s3, bucket: str):
     arquivo_consolidated = pasta_tmp / "consolidated.parquet"
 
     try:
-        endpoint = os.environ["R2_ENDPOINT"]
-        if not endpoint.startswith("http"):
-            endpoint = f"https://{endpoint}"
-
-        consolidar_gold_r2(
-            bucket=bucket,
-            prefix=R2_GOLD_PREFIX,
-            endpoint=endpoint,
-            access_key=os.environ["R2_ACCESS_KEY_ID"],
-            secret_key=os.environ["R2_SECRET_ACCESS_KEY"],
-            arquivo_saida=arquivo_consolidated,
-        )
-
-        fazer_upload_consolidated(s3, bucket, arquivo_consolidated)
+        storage.consolidar_particoes(arquivo_consolidated)
+        storage.salvar_consolidated(arquivo_consolidated)
 
     finally:
         if pasta_tmp.exists():
@@ -294,19 +218,19 @@ def gerar_consolidated(s3, bucket: str):
 # Dimensoes
 # -----------------------------------------------------------------------------
 
-def atualizar_dimensoes(s3, bucket: str):
+def atualizar_dimensoes():
     log.info("Atualizando tabelas dimensao...")
     PASTA_ROTULOS.mkdir(parents=True, exist_ok=True)
 
     try:
         path_estab = estab_ce_label(destino=PASTA_ROTULOS)
-        fazer_upload_dim(s3, bucket, Path(path_estab), "dim_estabelecimento_ce.parquet")
+        storage.salvar_dim(Path(path_estab), "dim_estabelecimento_ce.parquet")
     except Exception as e:
         log.error(f"Erro ao atualizar dim_estabelecimento: {e}", exc_info=True)
 
     try:
         path_proc = download_proc_label(destino=PASTA_ROTULOS)
-        fazer_upload_dim(s3, bucket, Path(path_proc), "dim_procedimento.parquet")
+        storage.salvar_dim(Path(path_proc), "dim_procedimento.parquet")
     except Exception as e:
         log.error(f"Erro ao atualizar dim_procedimento: {e}", exc_info=True)
 
@@ -328,12 +252,10 @@ def main():
     parser.add_argument("--force-consolidate",action="store_true", help="Regenera consolidated mesmo sem meses novos")
     args = parser.parse_args()
 
-    bucket = os.environ["R2_BUCKET"]
-    s3     = _s3_client()
-
     # -- Determinar meses a processar -----------------------------------------
-    particoes_existentes = listar_particoes_existentes(s3, bucket)
-    existe_consolidated  = consolidated_existe(s3, bucket)
+    particoes_existentes = storage.listar_particoes_existentes()
+    existe_consolidated  = storage.consolidated_existe()
+    log.info(f"Particoes ja existentes: {len(particoes_existentes)}")
 
     if args.ano_inicio and args.mes_inicio:
         ano_inicio, mes_inicio = args.ano_inicio, args.mes_inicio
@@ -367,7 +289,7 @@ def main():
             log.info(f"  -> {a}/{m:02d}")
 
         for ano, mes in meses_pendentes:
-            ok = processar_mes(s3, bucket, ano, mes)
+            ok = processar_mes(ano, mes)
             if ok:
                 sucessos += 1
             else:
@@ -387,13 +309,13 @@ def main():
     )
 
     if deve_consolidar:
-        gerar_consolidated(s3, bucket)
+        gerar_consolidated()
     else:
         log.info("Consolidated ja esta atualizado. Nenhuma acao necessaria.")
 
     # -- Dimensoes ------------------------------------------------------------
     if not args.skip_dims and (sucessos > 0 or not existe_consolidated):
-        atualizar_dimensoes(s3, bucket)
+        atualizar_dimensoes()
     elif args.skip_dims:
         log.info("Atualizacao de dimensoes puladas (--skip-dims).")
     else:

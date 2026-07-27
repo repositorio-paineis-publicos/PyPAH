@@ -4,8 +4,10 @@ gold.py
 Funcoes de geracao da camada Gold.
 
 processar_gold_particionado : agrega silver de um mes -> parquet gold local
-consolidar_gold_r2          : le todas as particoes do R2 -> consolidated.parquet local
-consolidar_gold_local       : utilitario para consolidar particoes locais (dev/debug)
+
+A consolidacao de particoes (local ou R2) foi movida para
+storage.consolidar_particoes, que escolhe o backend via STORAGE, evitando
+duas implementacoes quase identicas (uma por backend) vivendo aqui.
 """
 
 import duckdb
@@ -53,78 +55,4 @@ def processar_gold_particionado(
 
     con.close()
     log.info(f"Gold gerado em: {arquivo_saida}")
-    return Path(arquivo_saida)
-
-
-def consolidar_gold_r2(
-    bucket: str,
-    prefix: str,
-    endpoint: str,
-    access_key: str,
-    secret_key: str,
-    arquivo_saida: str | Path,
-) -> Path:
-    """
-    Le todas as particoes gold diretamente do R2 via DuckDB/httpfs
-    e gera um unico consolidated.parquet local, pronto para upload.
-
-    O DuckDB le as particoes em paralelo diretamente do R2,
-    sem precisar baixa-las para disco primeiro.
-    """
-    arquivo_saida = str(arquivo_saida)
-    glob_r2 = f"s3://{bucket}/{prefix}/ano=*/mes=*/dados.parquet"
-
-    con = duckdb.connect()
-    log.info("Configurando acesso ao R2 para consolidacao...")
-
-    con.execute("INSTALL httpfs; LOAD httpfs;")
-    con.execute(f"""
-        SET s3_region='auto';
-        SET s3_access_key_id='{access_key}';
-        SET s3_secret_access_key='{secret_key}';
-        SET s3_endpoint='{endpoint.replace('https://', '')}';
-        SET s3_url_style='path';
-    """)
-
-    log.info(f"Consolidando todas as particoes de: {glob_r2}")
-
-    con.execute(f"""
-        COPY (
-            SELECT *
-            FROM read_parquet('{glob_r2}', hive_partitioning=false)
-            ORDER BY data_ref
-        ) TO '{arquivo_saida}' (FORMAT PARQUET, COMPRESSION 'snappy')
-    """)
-
-    con.close()
-    log.info(f"Consolidated gerado em: {arquivo_saida}")
-    return Path(arquivo_saida)
-
-
-def consolidar_gold_local(
-    pasta_particoes: str | Path,
-    arquivo_saida: str | Path,
-) -> Path:
-    """
-    [Utilitario para desenvolvimento/debug]
-
-    Consolida particoes gold locais em um unico parquet.
-    Util para verificar dados sem precisar acessar o R2.
-    """
-    pasta_particoes = str(pasta_particoes)
-    arquivo_saida   = str(arquivo_saida)
-
-    con = duckdb.connect()
-    log.info(f"Consolidando particoes locais de: {pasta_particoes}")
-
-    con.execute(f"""
-        COPY (
-            SELECT *
-            FROM read_parquet('{pasta_particoes}/**/*.parquet', hive_partitioning=true)
-            ORDER BY Ano, Mes, PA_MUNPCN, PA_CODUNI, PA_PROC_ID
-        ) TO '{arquivo_saida}' (FORMAT PARQUET, COMPRESSION 'ztsd')
-    """)
-
-    con.close()
-    log.info(f"Consolidacao local concluida: {arquivo_saida}")
     return Path(arquivo_saida)

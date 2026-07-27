@@ -1,11 +1,15 @@
 FROM python:3.11-slim
+
 WORKDIR /app
 
 COPY requirements/requirements_api.txt .
 RUN pip install --no-cache-dir -r requirements_api.txt
 
 COPY API /app/API
+COPY storage.py /app/storage.py
+
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "API.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "API.main:app", "--host", "0.0.0.0", "--port", "8000"]

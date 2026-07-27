@@ -16,10 +16,13 @@ COPY requirements/requirements_pipeline.txt .
 RUN pip install --no-cache-dir -r requirements_pipeline.txt
 
 # Copia apenas os módulos necessários para o pipeline
+COPY storage.py /app/storage.py
 COPY Pipeline /app/Pipeline
 
 # Garante que Pipeline é um pacote Python
 RUN touch /app/Pipeline/__init__.py
+
+ENV PYTHONPATH=/app
 
 # Comando padrão: roda o orquestrador incremental
 # Para carga histórica, sobrescreva o CMD no Render com:

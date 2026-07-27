@@ -1,20 +1,18 @@
 from fastapi import APIRouter, Query
 from typing import List, Optional
-import os
 from API.connection import get_con
 from API.cache import make_key, get_cached, set_cached
+from storage import gold_path, dims_path, consolidated_path
 
 from dotenv import load_dotenv
 load_dotenv()
 
 router = APIRouter()
 
-BUCKET = os.environ.get("R2_BUCKET", "")
-GOLD = f"s3://{BUCKET}/gold"
-DIMS = f"s3://{BUCKET}/dims"
+GOLD = gold_path()
+DIMS = dims_path()
 
-# Lê todas as partições gold usando hive partitioning (ano=YYYY/mes=MM/dados.parquet)
-CONSOLIDATED = f"{GOLD}/consolidated_sample_30k.parquet"
+CONSOLIDATED = consolidated_path("consolidated.parquet")
 
 
 @router.get("/anos")

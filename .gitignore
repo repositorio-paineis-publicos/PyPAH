@@ -12,6 +12,8 @@ __pycache__/
 
 # Variáveis de ambiente
 .env
+.env.dev
+.env.prod
 
 # Dados (ETL / SIASUS)
 dados_sia/
