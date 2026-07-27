@@ -10,8 +10,6 @@ echo
 echo "[1/7] Criando diretórios de dados..."
 
 mkdir -p ~/Data/PyPAH
-mkdir -p ~/Data/PyPAH/bronze
-mkdir -p ~/Data/PyPAH/silver
 mkdir -p ~/Data/PyPAH/gold
 
 mkdir -p ~/Scripts
