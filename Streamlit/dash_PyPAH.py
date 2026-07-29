@@ -131,6 +131,12 @@ if filtrar_estab:
 # =============================================================================
 
 anos_disp = anos_disponiveis()
+if not anos_disp:
+    st.warning(
+        "Nenhum dado disponível. Execute a pipeline para carregar os dados."
+    )
+    st.stop()
+    
 filtro_anos = False
 
 if len(anos_disp) > 1:

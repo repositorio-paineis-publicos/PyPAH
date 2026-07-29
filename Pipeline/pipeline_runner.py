@@ -75,11 +75,19 @@ PASTA_SILVER  = BASE_TMP / "silver"
 PASTA_ROTULOS = BASE_TMP / "rotulos"
 
 MESES_ATRASO_DATASUS = 2
+DIA_LANCAMENTO_DATASUS = 15  # dia do mês em que o DATASUS costuma publicar
+
+def calcular_atraso_efetivo() -> int:
+    """Se ainda não passamos do dia de lançamento neste mês, o mês que
+    seria o 'limite' normal ainda não foi publicado — soma 1 mês de atraso."""
+    if date.today().day < DIA_LANCAMENTO_DATASUS:
+        return MESES_ATRASO_DATASUS + 1
+    return MESES_ATRASO_DATASUS
 
 
 def calcular_meses_disponiveis(ano_inicio: int, mes_inicio: int) -> list[tuple[int, int]]:
     hoje   = date.today()
-    limite = hoje - relativedelta(months=MESES_ATRASO_DATASUS)
+    limite = hoje - relativedelta(months=calcular_atraso_efetivo())
     limite_tuple = (limite.year, limite.month)
     cursor = date(ano_inicio, mes_inicio, 1)
     meses  = []
@@ -266,9 +274,15 @@ def main():
             proximo = date(ultimo_ano, ultimo_mes, 1) + relativedelta(months=1)
             ano_inicio, mes_inicio = proximo.year, proximo.month
             log.info(f"Modo incremental: a partir de {ano_inicio}/{mes_inicio:02d}")
+        # DEPOIS
         else:
-            ano_inicio, mes_inicio = 2018, 1
-            log.info("Nenhuma particao existente. Iniciando desde 2018/01.")
+            limite = date.today() - relativedelta(months=calcular_atraso_efetivo())
+            inicio = limite - relativedelta(months=2)  # 3 meses incluindo o mais recente disponível
+            ano_inicio, mes_inicio = inicio.year, inicio.month
+            log.info(
+                f"Nenhuma particao existente. Baixando os ultimos 3 meses "
+                f"disponiveis, a partir de {ano_inicio}/{mes_inicio:02d}."
+            )
 
     todos_os_meses  = calcular_meses_disponiveis(ano_inicio, mes_inicio)
     meses_pendentes = [(a, m) for a, m in todos_os_meses if (a, m) not in particoes_existentes]

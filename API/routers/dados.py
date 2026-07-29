@@ -1,3 +1,7 @@
+import os
+
+from duckdb import HTTPException
+
 from fastapi import APIRouter, Query
 from typing import List, Optional
 from API.connection import get_con
@@ -14,6 +18,8 @@ DIMS = dims_path()
 
 CONSOLIDATED = consolidated_path("consolidated.parquet")
 
+def gold_disponivel() -> bool:
+    return os.path.exists(CONSOLIDATED)
 
 @router.get("/anos")
 def anos_disponiveis():
@@ -21,6 +27,9 @@ def anos_disponiveis():
     cached = get_cached(key)
     if cached is not None:
         return cached
+    
+    if not gold_disponivel():
+        return []
 
     result = get_con().execute(f"""
         SELECT DISTINCT Ano
@@ -38,6 +47,9 @@ def meses_disponiveis(anos: List[int] = Query(...)):
     cached = get_cached(key)
     if cached is not None:
         return cached
+
+    if not gold_disponivel():
+        return []
 
     anos_sql = ",".join(map(str, anos))
 
@@ -59,6 +71,9 @@ def municipios_disponiveis():
     cached = get_cached(key)
     if cached is not None:
         return cached
+
+    if not gold_disponivel():
+        return []
 
     result = get_con().execute(f"""
         SELECT DISTINCT PA_MUNPCN
@@ -123,6 +138,9 @@ def dados_filtrados(
     if cached is not None:
         return cached
 
+    if not gold_disponivel():
+        return []
+
     where = []
 
     if anos:
@@ -147,6 +165,9 @@ def dados_filtrados(
 
     where_clause = ("WHERE " + " AND ".join(where)) if where else ""
 
+    if not gold_disponivel():
+        return []
+
     query = f"""
         SELECT
             data_ref,
@@ -167,6 +188,8 @@ def dados_filtrados(
         GROUP BY data_ref, PA_MUNPCN, PA_CODUNI, PA_PROC_ID, Ano, Mes
         ORDER BY data_ref
     """
+
+
 
     result = get_con().execute(query).df().to_dict(orient="records")
     set_cached(key, result)

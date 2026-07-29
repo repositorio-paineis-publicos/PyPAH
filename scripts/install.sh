@@ -11,11 +11,9 @@ echo "===================================="
 echo
 echo "[1/9] Criando diretórios de dados..."
 
-mkdir -p ~/Data/PyPAH
-mkdir -p ~/Data/PyPAH/dims
-mkdir -p ~/Data/PyPAH/bronze
-mkdir -p ~/Data/PyPAH/silver
-mkdir -p ~/Data/PyPAH/gold
+mkdir -p ~/Projetos/Data_PyPAH
+mkdir -p ~/Projetos/Data_PyPAH/dims
+mkdir -p ~/Projetos/Data_PyPAH/gold
 
 echo
 echo "[2/9] Verificando Docker..."

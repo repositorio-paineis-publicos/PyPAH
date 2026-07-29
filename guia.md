@@ -16,7 +16,13 @@ Se você não sabe se sua máquina tem `systemd` no WSL, assuma que não tem at�
 
 ---
 
+
+
 # Parte 1 — Preparação da máquina
+## Observação:
+
+#### *Caso você já possua algum desses serviços já instalados e configurados, não é necessário que realize todo o passo a passo da Parte 1 (o resto é necessário). No entanto, recomendo que faça para garantia que está tudo operando corretamente.*
+
 
 ## 1.1 Instalar o WSL
 
@@ -98,12 +104,10 @@ sudo docker-start
 ## 1.5 Estrutura de pastas esperada
 
 ```
-~/Projects/HUBrasil/
+~/Projects/
     PyPAH/                  <- repositório clonado (contém scripts/, .env.dev, etc.)
 
-~/Data/PyPAH/
-    bronze/
-    silver/
+~/Projects/Data_PyPAH/
     gold/
 ```
 
@@ -116,10 +120,10 @@ Recomendo clonar o projeto dentro do filesystem nativo da distro (`~/Projects/..
 ## 2.1 Clonar o repositório
 
 ```bash
-mkdir -p ~/Projects/HUBrasil
-cd ~/Projects/HUBrasil
+mkdir -p ~/Projects
+cd ~/Projects
 
-git clone git@github.com:<org>/PyPAH.git
+git clone https://github.com/repositorio-paineis-publicos/PyPAH.git
 cd PyPAH
 
 chmod +x scripts/*.sh
@@ -154,7 +158,44 @@ Na primeira vez que abrir `http://localhost:9000`:
 
 Docker Engine, diretórios e Compose Config devem estar `OK`. Containers da API/Dashboard e os endpoints ainda vão aparecer `FALHOU` — normal, nada foi subido ainda.
 
-## 2.5 Iniciar o cron
+
+## 2.5 Subir o ambiente
+
+```bash
+./scripts/start_dev.sh
+```
+
+Sobe Docker (via `docker-start`, se necessário), Portainer, API e Dashboard.
+
+## 2.6 Segunda checagem (pós-start)
+
+```bash
+./scripts/check_install.sh
+```
+
+Agora tudo deve aparecer `OK`.
+
+## 2.7 Rodar o pipeline manualmente
+
+### Pelo script:
+Será feito o download dos últimos 3 meses disponíveis no DataSUS
+```bash
+./scripts/run_pipeline.sh
+```
+
+### Direto pelo Compose (mais fácil de depurar, já que mostra a saída do container na hora):
+
+Você escolhe qual o período você quer baixar, com data de início e fim.
+
+```bash
+docker compose --env-file .env.dev run --rm pypah-pipeline \
+python -m Pipeline.pipeline_runner \
+    --ano-inicio 2022 \
+    --mes-inicio 1 \
+    --ano-fim 2023 \
+    --mes-fim 12
+```
+## 2.8 Iniciar o cron
 
 ```bash
 sudo service cron start
@@ -163,45 +204,15 @@ sudo service cron status
 
 Se quiser conferir ou editar a entrada manualmente:
 
+
 ```bash
 crontab -e
 ```
-
-## 2.6 Subir o ambiente
-
-```bash
-./scripts/start_dev.sh
-```
-
-Sobe Docker (via `docker-start`, se necessário), Portainer, API e Dashboard.
-
-## 2.7 Segunda checagem (pós-start)
-
-```bash
-./scripts/check_install.sh
-```
-
-Agora tudo deve aparecer `OK`.
-
-## 2.8 Rodar o pipeline manualmente
-
-Pelo script:
-
-```bash
-./scripts/run_pipeline.sh
-```
-
-Ou direto pelo Compose (mais fácil de depurar, já que mostra a saída do container na hora):
-
-```bash
-docker compose \
-    --env-file .env.dev \
-    run --rm pypah-pipeline
-```
-
+Se desejar mudar o tempo de gatilho do cron, apenas falça alteração nos asteriscos
+#### * * * * * -> Minuto/Hora/Dia do Mês/Mês/Dia da Semana
 ## 2.9 Testar se o cron está funcionando
 
-Depois do horário agendado (dia 20, 3h), confira o log:
+Depois do horário agendado (dia 20, 3h por padrão), confira o log:
 
 ```bash
 tail -f scripts/pipeline.log
@@ -232,7 +243,7 @@ Se aparecer a execução do pipeline ali, o cron está funcionando.
 sudo docker-start
 
 # 2. Entrar no projeto
-cd ~/Projects/HUBrasil/PyPAH
+cd ~/Projects/PyPAH
 
 # 3. Subir tudo
 ./scripts/start_dev.sh
@@ -261,8 +272,8 @@ cat ~/.ssh/id_ed25519.pub        # adicionar no GitHub
 ssh -T git@github.com
 
 # Parte 2 — projeto
-mkdir -p ~/Projects/HUBrasil && cd ~/Projects/HUBrasil
-git clone git@github.com:<org>/PyPAH.git
+mkdir -p ~/Projects && cd ~/Projects
+git clone https://github.com/repositorio-paineis-publicos/PyPAH.git
 cd PyPAH
 chmod +x scripts/*.sh
 
@@ -288,4 +299,17 @@ scripts/
 ├── start_dev.sh        # sobe Docker/Portainer/API/Dashboard
 ├── stop_dev.sh         # derruba o ambiente
 └── run_pipeline.sh     # roda o pipeline (manual ou via cron)
+```
+
+## Comandos após alteração
+
+Caso realize alguma alteração nos scripts, env e etc, apenas rode:
+
+```
+chmod +x scripts/*.sh
+
+./scripts/install.sh
+./scripts/check_install.sh
+./scripts/start_dev.sh
+./scripts/check_install.sh
 ```
