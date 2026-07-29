@@ -104,10 +104,10 @@ sudo docker-start
 ## 1.5 Estrutura de pastas esperada
 
 ```
-~/Projects/
+~/Projeto_SUS/
     PyPAH/                  <- repositório clonado (contém scripts/, .env.dev, etc.)
 
-~/Projects/Data_PyPAH/
+~/Projeto_SUS/Data_PyPAH/
     gold/
 ```
 
@@ -116,12 +116,15 @@ Recomendo clonar o projeto dentro do filesystem nativo da distro (`~/Projects/..
 ---
 
 # Parte 2 — Preparação do projeto
+## Observação
+
+### *A partir daqui repita tudo como está sendo mostrado, caso queira fazer diferente, será necessário mudar em outros scripts também.*
 
 ## 2.1 Clonar o repositório
 
 ```bash
-mkdir -p ~/Projects
-cd ~/Projects
+mkdir -p ~/Projeto_SUS
+cd ~/Projeto_SUS
 
 git clone https://github.com/repositorio-paineis-publicos/PyPAH.git
 cd PyPAH
@@ -136,11 +139,29 @@ chmod +x scripts/*.sh
 ```
 
 Esse script:
-- cria `~/Data/PyPAH/bronze`, `silver`, `gold`
+- cria `~/Projeto_SUS/Data_PyPAH/ gold`
 - instala o `docker-start` em `/usr/local/bin` e garante que o Docker Engine está rodando
 - confirma o Docker Compose
 - sobe o Portainer (se ainda não estiver rodando) em `http://localhost:9000`
-- gera o `.env.dev` a partir de `.env.example.dev` (se ainda não existir) — **revise as variáveis antes de continuar**
+
+- gera o `.env.dev` a partir de `.env.example.dev` (se ainda não existir)
+```
+— Altere as variáveis antes de continuar, principalmente o caminho do Data_PyPAH
+
+APP_ENV=development
+
+STORAGE=local
+
+# Local onde a pasta Data_PyPAH está localizada
+PYPAH_DATA_ROOT=/home/seu_usuario/Projetos/Data_PyPAH   
+
+
+# Nome do serviço no docker-compose (rede interna do Docker)
+API_URL=http://pypah-api:8000
+
+GROQ_API_KEY=...
+```
+
 - valida o `docker-compose` com esse `.env.dev`
 - configura a entrada do crontab que roda `run_pipeline.sh` todo dia 20 de cada mês às 3h (idempotente — não duplica se já existir)
 
@@ -192,8 +213,18 @@ docker compose --env-file .env.dev run --rm pypah-pipeline \
 python -m Pipeline.pipeline_runner \
     --ano-inicio 2022 \
     --mes-inicio 1 \
-    --ano-fim 2023 \
-    --mes-fim 12
+
+```
+### Informações sobre os parâmtros
+Se não for adicionado data de fim no docker compose, ele baixa da data de início até o último disponível, com o parâmetro de fim, ele encerra na data limite
+```
+--ano-fim 2023 \
+--mes-fim 12
+```
+Se você quiser não fazer o download das tabelas dimensão, adicione nos parâmetros do docker compose acima os parâmetros:
+
+```
+--skip-dims
 ```
 ## 2.8 Iniciar o cron
 
@@ -208,7 +239,7 @@ Se quiser conferir ou editar a entrada manualmente:
 ```bash
 crontab -e
 ```
-Se desejar mudar o tempo de gatilho do cron, apenas falça alteração nos asteriscos
+Se desejar mudar o tempo de gatilho do cron, apenas faça alteração nos asteriscos
 #### * * * * * -> Minuto/Hora/Dia do Mês/Mês/Dia da Semana
 ## 2.9 Testar se o cron está funcionando
 
@@ -243,7 +274,7 @@ Se aparecer a execução do pipeline ali, o cron está funcionando.
 sudo docker-start
 
 # 2. Entrar no projeto
-cd ~/Projects/PyPAH
+cd ~/Projeto_SUS/PyPAH
 
 # 3. Subir tudo
 ./scripts/start_dev.sh
@@ -272,7 +303,7 @@ cat ~/.ssh/id_ed25519.pub        # adicionar no GitHub
 ssh -T git@github.com
 
 # Parte 2 — projeto
-mkdir -p ~/Projects && cd ~/Projects
+mkdir -p ~/Projeto_SUS && cd ~/Projeto_SUS
 git clone https://github.com/repositorio-paineis-publicos/PyPAH.git
 cd PyPAH
 chmod +x scripts/*.sh

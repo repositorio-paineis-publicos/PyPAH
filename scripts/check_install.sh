@@ -26,10 +26,8 @@ check "Docker CLI............"   docker version
 check "Docker Compose........"   docker compose version
 check "Compose Config........"   docker compose --env-file .env.dev config
 
-check "Diretório Dados......."   test -d ~/Data/PyPAH
-check "Bronze................"   test -d ~/Data/PyPAH/bronze
-check "Silver................"   test -d ~/Data/PyPAH/silver
-check "Gold.................."   test -d ~/Data/PyPAH/gold
+check "Diretório Dados......."   test -d ~/Projeto_SUS/Data_PyPAH
+check "Gold.................."   test -d ~/Projeto_SUS/Data_PyPAH/gold
 
 check "Container API........."   bash -c "docker ps --format '{{.Names}}' | grep -q pypah-api"
 check "Container Dashboard..."   bash -c "docker ps --format '{{.Names}}' | grep -q pypah-app"
