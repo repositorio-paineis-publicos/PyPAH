@@ -16,6 +16,15 @@ docker compose \
     --env-file .env.dev \
     run --rm pypah-pipeline
 
+echo "Atualizando o cache da API"
+date
+docker compose \
+    --env-file .env.dev \
+    restart pypah-api
+
+
+
+
 echo
 echo "================================="
 echo "Pipeline finalizado"

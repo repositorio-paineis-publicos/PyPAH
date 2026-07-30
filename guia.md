@@ -315,6 +315,9 @@ cd ~/Projeto_SUS/PyPAH
 
 # 4. Trabalhar normalmente...
 
+# 5. Se tiver rodado a pipeline manualmente...
+docker compose --env-file .env.dev restart pypah-api
+
 # 5. Ao final, se quiser encerrar
 ./scripts/stop_dev.sh
 ```
@@ -366,15 +369,19 @@ scripts/
 └── run_pipeline.sh     # roda o pipeline (manual ou via cron)
 ```
 
-## Comandos após alteração
-
-Caso realize alguma alteração nos scripts, env e etc, apenas rode:
+## Comandos interessantes
+Sempre que for iniciar o projeto
+```
+./scripts/start_dev.sh
+```
+Caso queira fazer um check que tudo está operando normalmente:
 
 ```
-chmod +x scripts/*.sh
+./scripts/check_install.sh  
+```
 
-./scripts/install.sh
-./scripts/check_install.sh
-./scripts/start_dev.sh
-./scripts/check_install.sh
+Caso realize uma nova ingestão, recomendo que recrie o container da API para que ela atualize os dados que ela está servindo, pois com o uso de cache, pode ser que os dados estejam desatualizados, então apenas rode esse comando para reiniciar o container com o cache limpo:
+
+```
+docker compose --env-file .env.dev restart pypah-api
 ```
