@@ -223,6 +223,8 @@ Sobe Docker (via `docker-start`, se necessário), Portainer, API e Dashboard.
 
 Agora tudo deve aparecer `OK`.
 
+#### *Se for sua primeira execução do projeto e você não tiver dados baixados para alimentar a API/Dasboard, a API responderá que falhou, então apenas rode a pipeline(próximo passo do guia) e após o encerramento, a API e Dashboard já estarão funcionando alimentados, lembre de atualizar a página no navegador para evitar que a página desatualizada esteja na tela. Se roda o check de novo após a ingestão, a API responderá com `OK`, como todos os outros.*
+
 ## 2.7 Rodar o pipeline manualmente
 
 ### Pelo script:
