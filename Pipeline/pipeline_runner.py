@@ -30,6 +30,7 @@ Uso:
   python -m Pipeline.pipeline_runner --force-consolidate
 """
 
+import os
 import shutil
 import argparse
 import logging
@@ -215,6 +216,10 @@ def gerar_consolidated():
 
     try:
         storage.consolidar_particoes(arquivo_consolidated)
+        sample_rows = int(os.environ.get("SAMPLE_ROWS", 10000))
+        arquivo_sample = pasta_tmp / f"consolidated_sample_{sample_rows}.parquet"
+        storage.gerar_sample_estratificado(arquivo_consolidated, arquivo_sample, sample_rows)
+        storage.salvar_consolidated(arquivo_sample, nome_arquivo=f"consolidated_sample_{sample_rows}.parquet")
         storage.salvar_consolidated(arquivo_consolidated)
 
     finally:

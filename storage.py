@@ -54,12 +54,20 @@ def dims_path() -> str:
 
 def consolidated_path(nome_arquivo: str = "consolidated.parquet") -> str:
     """
-    nome_arquivo e parametrizavel porque o router da API atualmente aponta
-    para 'consolidated_sample_30k.parquet' (comportamento pre-existente,
-    preservado por esta mudanca — ver observacoes).
+    nome_arquivo e resolvido por consolidated_name(), conforme USE_SAMPLE.
     """
     return f"{gold_path()}/{nome_arquivo}"
 
+def consolidated_name() -> str:
+    """
+    Nome do arquivo consolidated a ser lido pela API, conforme USE_SAMPLE:
+      USE_SAMPLE=true  -> amostra estratificada por mes (ambiente demo/prod leve)
+      USE_SAMPLE=false -> dataset completo (padrao, usado em dev)
+    """
+    if os.environ.get("USE_SAMPLE", "false").lower() == "true":
+        sample_rows = os.environ.get("SAMPLE_ROWS", "10000")
+        return f"consolidated_sample_{sample_rows}.parquet"
+    return "consolidated.parquet"
 
 def configure_duckdb(con):
     """Habilita acesso ao R2 via httpfs quando STORAGE=r2. Sem efeito em modo local."""
@@ -162,6 +170,29 @@ def salvar_consolidated(arquivo_local: Path, nome_arquivo: str = "consolidated.p
     bucket = os.environ["R2_BUCKET"]
     s3.upload_file(str(arquivo_local), bucket, f"gold/{nome_arquivo}")
 
+def gerar_sample_estratificado(arquivo_consolidated: Path, arquivo_saida: Path, sample_rows: int):
+    """
+    Gera uma amostra estratificada por Ano/Mes a partir do consolidated.parquet
+    completo, garantindo que todos os meses apareçam na amostra (evita que um
+    sample puramente aleatorio sub-represente um mes, municipio ou procedimento).
+    """
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute(f"""
+        COPY (
+            SELECT * EXCLUDE (rn) FROM (
+                SELECT *,
+                    row_number() OVER (
+                        PARTITION BY Ano, Mes ORDER BY random()
+                    ) AS rn,
+                    count(DISTINCT Ano || '-' || Mes) OVER () AS n_meses
+                FROM read_parquet('{arquivo_consolidated}')
+            )
+            WHERE rn <= CEIL({sample_rows}.0 / n_meses)
+        ) TO '{arquivo_saida}' (FORMAT PARQUET, COMPRESSION 'snappy')
+    """)
+    con.close()
 
 def salvar_dim(arquivo_local: Path, nome_arquivo: str):
     if is_local():

@@ -145,23 +145,50 @@ Esse script:
 - sobe o Portainer (se ainda não estiver rodando) em `http://localhost:9000`
 
 - gera o `.env.dev` a partir de `.env.example.dev` (se ainda não existir)
-```
-— Altere as variáveis antes de continuar, principalmente o caminho do Data_PyPAH
 
+## Amostragem da API (USE_SAMPLE / SAMPLE_ROWS)
+
+A API pode servir o dataset completo ou uma amostra reduzida, dependendo do
+ambiente. Isso é controlado por duas variáveis no `.env`:
+
+- `USE_SAMPLE` (`true` / `false`) — se `true`, a API lê um arquivo de amostra
+  em vez do `consolidated.parquet` completo. Em dev isso normalmente fica
+  `false` (você quer ver os dados reais); em produção/demo, `true` deixa a
+  API mais leve e rápida.
+- `SAMPLE_ROWS` — quantas linhas tem a amostra (padrão: `10000`). Só tem
+  efeito quando `USE_SAMPLE=true`, e só é usado pelo **pipeline** (é ele
+  quem gera o arquivo de amostra, não a API).
+
+A amostra não é sorteada do zero a cada request — ela é gerada **uma vez**,
+pelo pipeline, de forma estratificada por Ano/Mês (garantindo que nenhum mês
+fique de fora da amostra) e salva como `consolidated_sample_<SAMPLE_ROWS>.parquet`
+junto do `consolidated.parquet` completo. A API só escolhe qual dos dois
+arquivos ler, com base em `USE_SAMPLE` — ela não sabe nem precisa saber que
+existe amostragem.
+
+Se você mudar `SAMPLE_ROWS`, a próxima execução do pipeline (`./scripts/run_pipeline.sh`)
+gera um novo arquivo de amostra com esse tamanho; o antigo não é apagado
+automaticamente.
+
+### Altere as variáveis antes de continuar, principalmente o caminho do Data_PyPAH
+
+```
 APP_ENV=development
 
 STORAGE=local
 
 # Local onde a pasta Data_PyPAH está localizada
-PYPAH_DATA_ROOT=/home/seu_usuario/Projetos/Data_PyPAH   
+PYPAH_DATA_ROOT=/home/seu_usuario/Projeto_SUS/Data_PyPAH   
 
+# Controla se a API le o dataset completo ou uma amostra reduzida.
+# Em dev, mantenha em false para trabalhar com os dados reais.
+USE_SAMPLE=false
 
 # Nome do serviço no docker-compose (rede interna do Docker)
 API_URL=http://pypah-api:8000
 
 GROQ_API_KEY=...
 ```
-
 - valida o `docker-compose` com esse `.env.dev`
 - configura a entrada do crontab que roda `run_pipeline.sh` todo dia 20 de cada mês às 3h (idempotente — não duplica se já existir)
 
@@ -226,9 +253,14 @@ Se você quiser não fazer o download das tabelas dimensão, adicione nos parâm
 ```
 --skip-dims
 ```
+
+Se quiser forçar a criação de outro consolidated, mesmo que não ocorra nenhum download novo
+```
+--force-consolidate
+```
 ## 2.8 Iniciar o cron
 
-```bash
+```
 sudo service cron start
 sudo service cron status
 ```

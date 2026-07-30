@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from typing import List, Optional
 from API.connection import get_con
 from API.cache import make_key, get_cached, set_cached
-from storage import gold_path, dims_path, consolidated_path
+from storage import gold_path, dims_path, consolidated_path, consolidated_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -16,7 +16,7 @@ router = APIRouter()
 GOLD = gold_path()
 DIMS = dims_path()
 
-CONSOLIDATED = consolidated_path("consolidated.parquet")
+CONSOLIDATED = consolidated_path(consolidated_name())
 
 def gold_disponivel() -> bool:
     return os.path.exists(CONSOLIDATED)
@@ -169,25 +169,22 @@ def dados_filtrados(
         return []
 
     query = f"""
-        SELECT
-            data_ref,
-            PA_MUNPCN,
-            PA_CODUNI,
-            PA_PROC_ID,
-            Ano,
-            Mes,
-            SUM(PA_VALPRO) AS PA_VALPRO,
-            SUM(PA_VALAPR) AS PA_VALAPR,
-            SUM(PA_QTDPRO) AS PA_QTDPRO,
-            SUM(PA_QTDAPR) AS PA_QTDAPR
-        FROM (
-            SELECT * FROM read_parquet('{CONSOLIDATED}')
+            SELECT
+                data_ref,
+                PA_MUNPCN,
+                PA_CODUNI,
+                PA_PROC_ID,
+                Ano,
+                Mes,
+                SUM(PA_VALPRO) AS PA_VALPRO,
+                SUM(PA_VALAPR) AS PA_VALAPR,
+                SUM(PA_QTDPRO) AS PA_QTDPRO,
+                SUM(PA_QTDAPR) AS PA_QTDAPR
+            FROM read_parquet('{CONSOLIDATED}')
             {where_clause}
-            LIMIT 100000
-            )
-        GROUP BY data_ref, PA_MUNPCN, PA_CODUNI, PA_PROC_ID, Ano, Mes
-        ORDER BY data_ref
-    """
+            GROUP BY data_ref, PA_MUNPCN, PA_CODUNI, PA_PROC_ID, Ano, Mes
+            ORDER BY data_ref
+        """
 
 
 
