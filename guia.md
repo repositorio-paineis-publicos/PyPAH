@@ -425,6 +425,8 @@ invalid spec: :/datasets: empty section between colons
 O problema foi que ou você não definiu no *.env* (seja prod ou dev) o *PYPAH_DATA_ROOT* ou no comando que usou, não setou qual *.env* usou e isso você pode definir com:
 
 ```
---env-file ".env.usado" #sete o nome do env sem as aspas
+#sete o nome do env que usar sem as aspas
+
+--env-file ".env.usado" 
 ```
 
