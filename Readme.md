@@ -195,6 +195,7 @@ PyPAH/
 │
 ├── docs/
 │   ├── arquitetura_PyPAH.png
+│   ├── PyPAH_agente_conversacional.png
 │   ├── PyPAH_com_filtros.png
 │   └── PyPAH_sem_filtros.png
 │
