@@ -225,15 +225,56 @@ Agora tudo deve aparecer `OK`.
 
 #### *Se for sua primeira execução do projeto e você não tiver dados baixados para alimentar a API/Dasboard, a API responderá que falhou, então apenas rode a pipeline(próximo passo do guia) e após o encerramento, a API e Dashboard já estarão funcionando alimentados, lembre de atualizar a página no navegador para evitar que a página desatualizada esteja na tela. Se roda o check de novo após a ingestão, a API responderá com `OK`, como todos os outros.*
 
-## 2.7 Rodar o pipeline manualmente
+## 2.7 Iniciar o cron
 
-### Pelo script:
+```
+sudo service cron start
+sudo service cron status
+```
+
+Se quiser conferir ou editar a entrada manualmente:
+
+
+```bash
+crontab -e
+```
+Se desejar mudar o tempo de gatilho do cron, apenas faça alteração nos asteriscos
+#### * * * * * -> Minuto/Hora/Dia do Mês/Mês/Dia da Semana
+## 2.8 Testar se o cron está funcionando
+
+Depois do horário agendado (dia 20, 3h por padrão), confira o log:
+
+```bash
+tail -f scripts/pipeline.log
+```
+
+Se aparecer a execução do pipeline ali, o cron está funcionando.
+
+## 2.9 Acessar os serviços
+
+| Serviço    | URL                              |
+|------------|-----------------------------------|
+| Dashboard  | http://localhost:8501             |
+| API (docs) | http://localhost:8000/docs        |
+| Portainer  | http://localhost:9000             |
+
+## 2.10 Encerrar o ambiente
+
+```bash
+./scripts/stop_dev.sh
+```
+
+---
+
+# Parte 3 - Rodar o pipeline manualmente
+
+## Pelo script:
 Será feito o download dos últimos 3 meses disponíveis no DataSUS
 ```bash
 ./scripts/run_pipeline.sh
 ```
 
-### Direto pelo Compose (mais fácil de depurar, já que mostra a saída do container na hora):
+## Direto pelo Compose (mais fácil de depurar, já que mostra a saída do container na hora):
 
 Você escolhe qual o período você quer baixar, com data de início e fim.
 
@@ -250,7 +291,7 @@ Se não for adicionado data de fim no docker compose, ele baixa da data de iníc
 --ano-fim 2023 \
 --mes-fim 12
 ```
-Se você quiser não fazer o download das tabelas dimensão, adicione nos parâmetros do docker compose acima os parâmetros:
+Se você quiser não fazer o download das tabelas dimensão, adicione como primeiro parâmetro do docker compose:
 
 ```
 --skip-dims
@@ -260,46 +301,25 @@ Se quiser forçar a criação de outro consolidated, mesmo que não ocorra nenhu
 ```
 --force-consolidate
 ```
-## 2.8 Iniciar o cron
-
+## Limpando Cache dos Containers
+Após rodar o fluxo, rode esses dois comandos para que o cache dos containers seja resetado e após atualização manual, a API e o Dashboard não estejam consumindo dados antigos.
 ```
-sudo service cron start
-sudo service cron status
-```
-
-Se quiser conferir ou editar a entrada manualmente:
-
-
-```bash
-crontab -e
-```
-Se desejar mudar o tempo de gatilho do cron, apenas faça alteração nos asteriscos
-#### * * * * * -> Minuto/Hora/Dia do Mês/Mês/Dia da Semana
-## 2.9 Testar se o cron está funcionando
-
-Depois do horário agendado (dia 20, 3h por padrão), confira o log:
-
-```bash
-tail -f scripts/pipeline.log
+docker compose --env-file .env.dev restart pypah-api
+docker compose --env-file .env.dev restart pypah-app
 ```
 
-Se aparecer a execução do pipeline ali, o cron está funcionando.
+## Limpando o computador de todos os containers
 
-## 2.10 Acessar os serviços
+Caso você queira apagar todos os volumes, imagens, containers e resetar o ambiente para como se fosse zerado, ou seja,use esses comandos para limpeza:
 
-| Serviço    | URL                              |
-|------------|-----------------------------------|
-| Dashboard  | http://localhost:8501             |
-| API (docs) | http://localhost:8000/docs        |
-| Portainer  | http://localhost:9000             |
-
-## 2.11 Encerrar o ambiente
-
-```bash
-./scripts/stop_dev.sh
 ```
-
----
+docker compose down --env-file .env.dev down -v
+docker rm -f $(docker ps -aq) 2>/dev/null
+docker rmi -f $(docker images -aq) 2>/dev/null
+docker volume rm $(docker volume ls -q) 2>/dev/null
+docker builder prune -af
+```
+Com isso, será removido a imagem do *pypah-api*, *pypah-app*, *pypah-pipeline* e o volume *portainer_data*, forçando tudo a ser reconstruído na próxima instalação. É o cenário mais próximo de uma máquina "limpa" sem reinstalar o Docker.
 
 # Fluxo do dia a dia (depois da instalação inicial)
 
@@ -317,6 +337,7 @@ cd ~/Projeto_SUS/PyPAH
 
 # 5. Se tiver rodado a pipeline manualmente...
 docker compose --env-file .env.dev restart pypah-api
+docker compose --env-file .env.dev restart pypah-app
 
 # 5. Ao final, se quiser encerrar
 ./scripts/stop_dev.sh
@@ -385,3 +406,25 @@ Caso realize uma nova ingestão, recomendo que recrie o container da API para qu
 ```
 docker compose --env-file .env.dev restart pypah-api
 ```
+
+
+Caso realize uma nova ingestão, recomendo que recrie o container da APP para que ela atualize os dados que ela está servindo, pois com o uso de cache, pode ser que os dados estejam desatualizados, então apenas rode esse comando para reiniciar o container com o cache limpo:
+
+```
+docker compose --env-file .env.dev restart pypah-app
+```
+
+### Aviso
+Caso no seu uso aconteça algum problema do tipo:
+
+```
+WARN[0000] The "PYPAH_DATA_ROOT" variable is not set. Defaulting to a blank string. 
+invalid spec: :/datasets: empty section between colons
+```
+
+O problema foi que ou você não definiu no *.env* (seja prod ou dev) o *PYPAH_DATA_ROOT* ou no comando que usou, não setou qual *.env* usou e isso você pode definir com:
+
+```
+--env-file ".env.usado" #sete o nome do env sem as aspas
+```
+
