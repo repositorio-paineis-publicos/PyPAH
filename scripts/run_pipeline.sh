@@ -22,6 +22,11 @@ docker compose \
     --env-file .env.dev \
     restart pypah-api
 
+echo "Atualizando o cache do Dashboard"
+date
+docker compose \
+    --env-file .env.dev \
+    restart pypah-app
 
 
 

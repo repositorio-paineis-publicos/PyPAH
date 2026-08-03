@@ -4,8 +4,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-COPY requirements/requirements_user.txt .
-RUN pip install --no-cache-dir -r requirements_user.txt
+COPY requirements/requirements_dash.txt .
+RUN pip install --no-cache-dir -r requirements_dash.txt
 
 # Copia só o necessário para o app
 COPY Streamlit /app/Streamlit
@@ -19,8 +19,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-COPY requirements/requirements_user.txt .
-RUN pip install --no-cache-dir -r requirements_user.txt
+COPY requirements/requirements_dash.txt .
+RUN pip install --no-cache-dir -r requirements_dash.txt
 
 COPY . /app
 

@@ -1,18 +1,5 @@
 services:
 
-  pypah-dev:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.dev
-    container_name: pypah-dev
-    volumes:
-      - ./ETL:/app/ETL
-      - ./Streamlit:/app/Streamlit
-    ports:
-      - "8502:8501"
-    stdin_open: true
-    tty: true
-
   pypah-api:
     build:
       context: .
@@ -25,12 +12,12 @@ services:
     # Usado apenas quando STORAGE=local (.env.dev). Em STORAGE=r2 (.env.prod)
     # o DATA_ROOT nao e lido e este mount fica sem efeito.
     volumes:
-      - ${PYPAH_DATA_ROOT:-~/Data/PyPAH}:/datasets
+      - ${PYPAH_DATA_ROOT:-~/Data_PyPAH}:/datasets
 
   pypah-app:
     build:
       context: .
-      dockerfile: docker/Dockerfile.user
+      dockerfile: docker/Dockerfile.dash
     container_name: pypah-app
     ports:
       - "8501:8501"
