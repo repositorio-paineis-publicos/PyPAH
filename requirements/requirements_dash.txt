@@ -3,8 +3,6 @@ pandas>=2.2.3
 plotly>=5.24
 setuptools
 wheel
-fastapi
-uvicorn
 
 langchain==0.3.22
 langchain-groq==0.3.2
