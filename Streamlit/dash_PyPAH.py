@@ -5,8 +5,8 @@ import pandas as pd
 import plotly.express as px
 
 from langchain_groq import ChatGroq
-from langchain.prompts import PromptTemplate
-from langchain.agents import create_react_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
 import sys
@@ -372,7 +372,7 @@ with aba4:
     if "memoria_agente" not in st.session_state:
         st.session_state.memoria_agente = ConversationBufferMemory(
             memory_key="chat_history",
-            return_messages=False,
+            return_messages=True,  # o agente de tool calling espera mensagens, não uma string única
         )
 
     # Reconstrói o agente sempre que o DataFrame muda (filtros alterados).
@@ -386,46 +386,33 @@ with aba4:
 
         llm_agente = ChatGroq(
             api_key=os.getenv("GROQ_API_KEY"),
-            model_name="llama-3.3-70b-versatile",
+            model_name="openai/gpt-oss-120b",
             temperature=0,
         )
 
-        tool_names = ", ".join([t.name for t in st.session_state._tools])
-        tools_desc = "\n".join([f"- {t.name}: {t.description}" for t in st.session_state._tools])
-
-        prompt_agente = PromptTemplate(
-            input_variables=["input", "agent_scratchpad", "tools", "tool_names", "chat_history"],
-            template=f"""
-Você é um assistente especializado em dados do SIA/SUS (Sistema de Informações Ambulatoriais do SUS).
+        # Tool calling nativo em vez de ReAct em texto livre: o modelo devolve as
+        # chamadas de ferramenta em formato estruturado (function calling da Groq),
+        # então não dependemos mais de regex sobre "Action:"/"Action Input:" no
+        # texto — formato que o gpt-oss-120b não segue de forma confiável (ele usa
+        # o formato Harmony internamente e tende a decorar os marcadores com
+        # markdown ou misturar Final Answer + Action na mesma resposta).
+        prompt_agente = ChatPromptTemplate.from_messages([
+            ("system", f"""Você é um assistente especializado em dados do SIA/SUS (Sistema de Informações Ambulatoriais do SUS).
 Responda sempre em português. Seja objetivo e claro.
 
 Contexto das colunas disponíveis:
 {DESCRICAO_COLUNAS}
 
-Histórico da conversa:
-{{chat_history}}
+Use as ferramentas disponíveis sempre que precisar consultar, filtrar ou calcular algo sobre
+os dados — nunca invente números. Depois de obter o resultado de uma ferramenta, responda
+diretamente com a resposta final ao usuário; não chame a mesma ferramenta de novo para a
+mesma pergunta se já tiver o resultado."""),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+            MessagesPlaceholder("agent_scratchpad"),
+        ])
 
-Você tem acesso às seguintes ferramentas:
-{{tools}}
-
-Use o seguinte formato:
-
-Question: a pergunta de entrada que você deve responder
-Thought: você deve sempre pensar no que fazer
-Action: a ação a ser tomada, deve ser uma de [{{tool_names}}]
-Action Input: a entrada para a ação
-Observation: o resultado da ação
-... (este Thought/Action/Action Input/Observation pode se repetir N vezes)
-Thought: Agora eu sei a resposta final
-Final Answer: a resposta final para a pergunta de entrada original
-
-Comece!
-
-Question: {{input}}
-Thought: {{agent_scratchpad}}""",
-        )
-
-        agente = create_react_agent(
+        agente = create_tool_calling_agent(
             llm=llm_agente,
             tools=st.session_state._tools,
             prompt=prompt_agente,
@@ -437,6 +424,7 @@ Thought: {{agent_scratchpad}}""",
             memory=st.session_state.memoria_agente,
             verbose=True,
             handle_parsing_errors=True,
+            max_iterations=10,
         )
 
     # ------------------------------------------------------------------

@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 
+from rapidfuzz import process, fuzz
+
 from langchain_groq import ChatGroq
 from langchain.tools import Tool
 from langchain.prompts import PromptTemplate
@@ -26,8 +28,9 @@ DESCRICAO_COLUNAS = """
 def _get_llm():
     return ChatGroq(
         api_key=os.getenv("GROQ_API_KEY"),
-        model_name="llama-3.3-70b-versatile",
+        model_name="openai/gpt-oss-120b",
         temperature=0,
+        model_kwargs={"reasoning_effort": "low"},
     )
 
 
@@ -314,6 +317,40 @@ Elabore um relatório explicativo com:
 
 
 # =============================================================================
+# Resolução de entidade via fuzzy matching
+# =============================================================================
+
+def _selecionar_relevantes(pergunta: str, nomes: list, top_n: int) -> list:
+    """
+    Rankeia `nomes` (labels de procedimento/estabelecimento presentes no recorte
+    atual) por relevância fuzzy em relação à `pergunta` e retorna os índices dos
+    `top_n` mais relevantes.
+
+    Substitui o corte arbitrário por posição (`.head(N)`) usado anteriormente para
+    montar a amostra de exemplos enviada ao LLM: se o usuário menciona um
+    estabelecimento ou procedimento específico (mesmo com nome parcial, abreviado
+    ou digitado com pequenas variações), ele passa a aparecer na amostra em vez de
+    depender de estar entre os primeiros N valores únicos do DataFrame.
+
+    Não depende de nenhum modelo de embedding — usa apenas comparação lexical
+    (rapidfuzz), suficiente para nomes de entidades curtos e estruturados como os
+    do CNES/SIGTAP. Caso a pergunta não mencione nenhuma entidade específica, os
+    scores ficam próximos entre si e o resultado se comporta como uma amostra
+    qualquer (equivalente ao comportamento anterior).
+    """
+    if not nomes:
+        return []
+
+    matches = process.extract(
+        pergunta,
+        nomes,
+        scorer=fuzz.token_set_ratio,
+        limit=min(top_n, len(nomes)),
+    )
+    return [idx for _choice, _score, idx in matches]
+
+
+# =============================================================================
 # Ferramenta 3 — Execução de código pandas gerado pelo LLM
 # =============================================================================
 
@@ -388,21 +425,40 @@ def _executar_pandas(
         and str(df_enr["nome_estabelecimento"].iloc[0]) != str(df_enr["PA_CODUNI"].iloc[0])
     )
 
-    amostra_procs = (
-        df_enr[["PA_PROC_ID", "nome_procedimento"]]
-        .drop_duplicates("PA_PROC_ID")
-        .head(10)
-        .apply(lambda r: f"  {r['PA_PROC_ID']} -> {r['nome_procedimento']}", axis=1)
-        .tolist()
-    ) if tem_nome_proc else []
+    # Em vez de pegar arbitrariamente os primeiros N valores únicos, seleciona os
+    # procedimentos/estabelecimentos presentes no recorte atual que são mais
+    # relevantes (fuzzy) para a pergunta do usuário — ver `_selecionar_relevantes`.
+    if tem_nome_proc:
+        proc_unicos = (
+            df_enr[["PA_PROC_ID", "nome_procedimento"]]
+            .drop_duplicates("PA_PROC_ID")
+            .reset_index(drop=True)
+        )
+        idxs_proc = _selecionar_relevantes(
+            pergunta, proc_unicos["nome_procedimento"].tolist(), top_n=10
+        )
+        amostra_procs = [
+            f"  {row.PA_PROC_ID} -> {row.nome_procedimento}"
+            for row in proc_unicos.iloc[idxs_proc].itertuples()
+        ]
+    else:
+        amostra_procs = []
 
-    amostra_ests = (
-        df_enr[["PA_CODUNI", "nome_estabelecimento"]]
-        .drop_duplicates("PA_CODUNI")
-        .head(5)
-        .apply(lambda r: f"  {r['PA_CODUNI']} -> {r['nome_estabelecimento']}", axis=1)
-        .tolist()
-    ) if tem_nome_est else []
+    if tem_nome_est:
+        est_unicos = (
+            df_enr[["PA_CODUNI", "nome_estabelecimento"]]
+            .drop_duplicates("PA_CODUNI")
+            .reset_index(drop=True)
+        )
+        idxs_est = _selecionar_relevantes(
+            pergunta, est_unicos["nome_estabelecimento"].tolist(), top_n=5
+        )
+        amostra_ests = [
+            f"  {row.PA_CODUNI} -> {row.nome_estabelecimento}"
+            for row in est_unicos.iloc[idxs_est].itertuples()
+        ]
+    else:
+        amostra_ests = []
 
     schema = (
         "Colunas disponíveis: " + str(list(df_enr.columns)) + "\n"
@@ -614,7 +670,7 @@ def criar_ferramentas(
     """
 
     ferramenta_pandas = Tool(
-        name="Executar Análise",
+        name="executar_analise",
         func=lambda pergunta: _executar_pandas(pergunta, df, df_dim_est, df_dim_proc),
         description=(
             "Use esta ferramenta para QUALQUER pergunta analítica que envolva filtros, "
@@ -632,7 +688,7 @@ def criar_ferramentas(
     )
 
     ferramenta_informacoes = Tool(
-        name="Informações Dados",
+        name="informacoes_dados",
         func=lambda pergunta: _informacoes_dados(pergunta, df, df_dim_est, df_dim_proc),
         description=(
             "Use APENAS quando o usuário pedir um panorama geral do dataset: "
@@ -644,7 +700,7 @@ def criar_ferramentas(
     )
 
     ferramenta_estatisticas = Tool(
-        name="Resumo Estatístico",
+        name="resumo_estatistico",
         func=lambda pergunta: _resumo_estatistico(pergunta, df, df_dim_est, df_dim_proc),
         description=(
             "Use quando o usuário pedir estatísticas descritivas completas: "
@@ -655,13 +711,13 @@ def criar_ferramentas(
     )
 
     ferramenta_consulta = Tool(
-        name="Consulta Dados",
+        name="consulta_dados",
         func=lambda pergunta: _consulta_dados(pergunta, df, df_dim_est, df_dim_proc),
         description=(
             "Use esta ferramenta para obter um panorama analítico geral dos dados atuais: "
             "totais globais, top 5 estabelecimentos, top 5 procedimentos por valor/quantidade, "
             "evolução mensal. NÃO use se a pergunta pede filtro por ano, mês, ou entidade específica — "
-            "nesse caso use 'Executar Análise'."
+            "nesse caso use 'executar_analise'."
         ),
         return_direct=False,
     )
